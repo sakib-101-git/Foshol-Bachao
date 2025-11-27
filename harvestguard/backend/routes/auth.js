@@ -1,0 +1,159 @@
+// Authentication routes - register, login
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const { hashPassword, comparePassword } = require('../utils/hash');
+const { generateToken, authMiddleware } = require('../utils/jwt');
+
+const router = express.Router();
+
+// Initialize with db passed from main app
+module.exports = function(db) {
+  
+  /**
+   * POST /api/auth/register
+   * Register a new farmer account
+   */
+  router.post('/register', async (req, res) => {
+    try {
+      const { email, phone, password, name, preferredLanguage = 'bn' } = req.body;
+      
+      // Basic validation
+      if (!email || !password || !name) {
+        return res.status(400).json({ 
+          error: 'Missing required fields',
+          errorBn: 'প্রয়োজনীয় তথ্য অনুপস্থিত'
+        });
+      }
+      
+      // Check if user exists
+      const users = db.data.users || [];
+      const existingUser = users.find(u => u.email === email);
+      
+      if (existingUser) {
+        return res.status(400).json({ 
+          error: 'Email already registered',
+          errorBn: 'এই ইমেইল ইতিমধ্যে নিবন্ধিত'
+        });
+      }
+      
+      // Hash password
+      const passwordHash = await hashPassword(password);
+      
+      // Create user
+      const newUser = {
+        id: uuidv4(),
+        email,
+        phone: phone || '',
+        passwordHash,
+        name,
+        preferredLanguage,
+        createdAt: new Date().toISOString()
+      };
+      
+      db.data.users.push(newUser);
+      await db.write();
+      
+      // Generate token
+      const token = generateToken(newUser);
+      
+      // Return user without password hash
+      const { passwordHash: _, ...userWithoutPassword } = newUser;
+      
+      res.status(201).json({
+        message: 'Registration successful',
+        messageBn: 'নিবন্ধন সফল হয়েছে',
+        token,
+        user: userWithoutPassword
+      });
+      
+    } catch (err) {
+      console.error('Register error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  /**
+   * POST /api/auth/login
+   * Login with email and password
+   */
+  router.post('/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ 
+          error: 'Email and password required',
+          errorBn: 'ইমেইল এবং পাসওয়ার্ড প্রয়োজন'
+        });
+      }
+      
+      // Find user
+      const users = db.data.users || [];
+      const user = users.find(u => u.email === email);
+      
+      if (!user) {
+        return res.status(401).json({ 
+          error: 'Invalid credentials',
+          errorBn: 'ভুল তথ্য'
+        });
+      }
+      
+      // Check password
+      const isValid = await comparePassword(password, user.passwordHash);
+      
+      if (!isValid) {
+        // Special case: demo account with simple password check
+        if (email === 'demo@harvestguard.com' && password === 'demo123') {
+          // Allow demo login
+        } else {
+          return res.status(401).json({ 
+            error: 'Invalid credentials',
+            errorBn: 'ভুল তথ্য'
+          });
+        }
+      }
+      
+      // Generate token
+      const token = generateToken(user);
+      
+      // Return user without password
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      
+      res.json({
+        message: 'Login successful',
+        messageBn: 'লগইন সফল',
+        token,
+        user: userWithoutPassword
+      });
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  /**
+   * GET /api/auth/me
+   * Get current user info (requires auth)
+   */
+  router.get('/me', authMiddleware, async (req, res) => {
+    try {
+      const users = db.data.users || [];
+      const user = users.find(u => u.id === req.user.id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const { passwordHash: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword });
+      
+    } catch (err) {
+      console.error('Get user error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  return router;
+};
+

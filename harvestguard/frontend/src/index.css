@@ -1,0 +1,638 @@
+/* HarvestGuard - Main Styles */
+/* Fonts are loaded in index.html */
+
+:root {
+  --primary: #16a34a;
+  --primary-dark: #15803d;
+  --primary-light: #22c55e;
+  --secondary: #d4a853;
+  --danger: #dc2626;
+  --warning: #f59e0b;
+  --bg: #f0fdf4;
+  --bg-white: #ffffff;
+  --text: #1f2937;
+  --text-light: #6b7280;
+  --border: #e5e7eb;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --radius: 12px;
+  --radius-lg: 20px;
+}
+
+/* Ensure all text is visible */
+*, *::before, *::after {
+  -webkit-text-fill-color: inherit;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', 'Hind Siliguri', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cabinet Grotesk', 'Inter', 'Hind Siliguri', sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+body, p, span, div, button, input, select, textarea {
+  font-family: 'Inter', 'Hind Siliguri', sans-serif;
+}
+
+/* Bangla text support - use Hind Siliguri */
+[lang="bn"], 
+.lang-bn,
+*[data-lang="bn"] {
+  font-family: 'Hind Siliguri', 'Inter', sans-serif;
+}
+
+/* Ensure headings with Cabinet Grotesk have proper fallback */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cabinet Grotesk', 'Inter', 'Hind Siliguri', sans-serif;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: white;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--primary);
+}
+
+.btn-outline:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-large {
+  padding: 16px 32px;
+  font-size: 1.2rem;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.form-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: #1f2937;
+  transition: border-color 0.2s;
+  -webkit-text-fill-color: #1f2937;
+}
+
+.form-input::placeholder {
+  color: #9ca3af;
+  -webkit-text-fill-color: #9ca3af;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-select {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  -webkit-text-fill-color: #1f2937;
+}
+
+.form-select option {
+  color: #1f2937;
+  background: #ffffff;
+}
+
+/* Cards */
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 20px 16px;
+}
+
+/* Header */
+.header {
+  background: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.header-logo span {
+  font-size: 1.5rem;
+}
+
+/* Language Toggle */
+.lang-toggle {
+  padding: 8px 16px;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  border-radius: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lang-toggle:hover {
+  background: var(--primary);
+  color: white;
+}
+
+/* Status Banner */
+.status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.status-online {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-offline {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Sync Banner */
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.sync-banner .btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+
+/* Batch Card */
+.batch-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.batch-card.unsynced {
+  border-left-color: var(--warning);
+}
+
+.batch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.batch-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.batch-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.batch-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.batch-status.completed {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.batch-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+/* Weather Widget */
+.weather-card {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.weather-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.weather-temp {
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.weather-details {
+  display: flex;
+  gap: 24px;
+}
+
+.weather-item {
+  text-align: center;
+}
+
+.weather-item-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.weather-item-label {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* Advisory */
+.advisory {
+  padding: 16px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.advisory.high {
+  background: #fef2f2;
+  border-left: 4px solid var(--danger);
+}
+
+.advisory.low {
+  background: #f0fdf4;
+  border-left: 4px solid var(--primary);
+}
+
+.advisory-icon {
+  font-size: 1.5rem;
+}
+
+.advisory-text {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Badge */
+.badge-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fefce8;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.badge-icon {
+  font-size: 2rem;
+}
+
+.badge-info h4 {
+  font-size: 1rem;
+  margin-bottom: 2px;
+}
+
+.badge-info p {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+/* Onboarding */
+.onboarding {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.onboarding-slide {
+  max-width: 400px;
+}
+
+.onboarding-icon {
+  font-size: 4rem;
+  margin-bottom: 24px;
+}
+
+.onboarding-title {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+}
+
+.onboarding-text {
+  color: var(--text-light);
+  margin-bottom: 32px;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.onboarding-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.onboarding-dot.active {
+  background: var(--primary);
+}
+
+/* Workflow Steps */
+.workflow {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 32px 0;
+  flex-wrap: wrap;
+}
+
+.workflow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.workflow-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.workflow-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--primary);
+  font-size: 1.5rem;
+}
+
+/* Hero Section */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+}
+
+.hero-logo {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  opacity: 0.9;
+  margin-bottom: 24px;
+}
+
+.hero-text {
+  max-width: 500px;
+  margin-bottom: 32px;
+  opacity: 0.9;
+  line-height: 1.8;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hero .btn-primary {
+  background: var(--secondary);
+}
+
+.hero .btn-outline {
+  border-color: white;
+  color: white;
+}
+
+.hero .btn-outline:hover {
+  background: white;
+  color: var(--primary);
+}
+
+/* 3D Model Viewer */
+.model-viewer-container {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 24px;
+}
+
+model-viewer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.25rem; }
+  
+  .btn { padding: 14px 20px; }
+  .btn-large { padding: 18px 28px; }
+  
+  .weather-details {
+    flex-wrap: wrap;
+  }
+  
+  .batch-info {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}

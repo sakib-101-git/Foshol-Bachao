@@ -87,21 +87,41 @@ module.exports = function(db) {
         });
       }
       
-      // Find user
-      const users = db.data.users || [];
-      const user = users.find(u => u.email === email);
-      
-      if (!user) {
-        return res.status(401).json({ 
-          error: 'Invalid credentials',
-          errorBn: 'ভুল তথ্য'
-        });
-      }
-      
-      // Special case: demo account - always allow with correct password
+      // Special case: demo account - create if doesn't exist and allow login
       if (email === 'demo@harvestguard.com' && password === 'demo123') {
+        let users = db.data.users || [];
+        let user = users.find(u => u.email === email);
+        
+        // Create demo user if doesn't exist
+        if (!user) {
+          const passwordHash = await hashPassword('demo123');
+          user = {
+            id: 'demo-farmer-001',
+            email: 'demo@harvestguard.com',
+            phone: '+8801712345678',
+            passwordHash: passwordHash,
+            name: 'Demo Farmer',
+            preferredLanguage: 'bn',
+            createdAt: new Date().toISOString()
+          };
+          users.push(user);
+          db.data.users = users;
+          await db.write();
+        }
+        
         // Allow demo login without checking hash
       } else {
+        // Find user for other accounts
+        const users = db.data.users || [];
+        const user = users.find(u => u.email === email);
+        
+        if (!user) {
+          return res.status(401).json({ 
+            error: 'Invalid credentials',
+            errorBn: 'ভুল তথ্য'
+          });
+        }
+        
         // Check password for all other accounts
         const isValid = await comparePassword(password, user.passwordHash);
         

@@ -165,9 +165,7 @@ function Landing() {
       ]
     },
     cta: {
-      register: { en: 'Start Protecting Your Harvest', bn: 'আপনার ফসল রক্ষা শুরু করুন' },
-      login: { en: 'Already have an account?', bn: 'ইতিমধ্যে একাউন্ট আছে?' },
-      demo: { en: 'Try Demo', bn: 'ডেমো চেষ্টা করুন' }
+      experience: { en: 'Click to Experience', bn: 'অভিজ্ঞতা নিন' }
     }
   };
   
@@ -203,17 +201,10 @@ function Landing() {
           <div className="hero-buttons">
             <button 
               className="btn btn-hero-primary"
-              onClick={() => navigate('/register')}
+              onClick={() => navigate('/dashboard')}
               type="button"
             >
-              {content.cta.register[lang]}
-            </button>
-            <button 
-              className="btn btn-hero-outline"
-              onClick={() => navigate('/login')}
-              type="button"
-            >
-              {content.cta.login[lang]}
+              {lang === 'bn' ? '🔓 অভিজ্ঞতা নিন' : '🔓 Click to Experience'}
             </button>
           </div>
         </div>
@@ -407,20 +398,11 @@ function Landing() {
           <div className="cta-buttons">
             <button 
               className="btn btn-cta-primary"
-              onClick={() => navigate('/register')}
+              onClick={() => navigate('/dashboard')}
               type="button"
             >
-              {content.cta.register[lang]}
+              {lang === 'bn' ? '🔓 অভিজ্ঞতা নিন' : '🔓 Click to Experience'}
             </button>
-          </div>
-          
-          <div className="demo-hint">
-            <span>🔑</span>
-            <p>
-              {lang === 'bn' 
-                ? 'ডেমো: demo@harvestguard.com / demo123'
-                : 'Demo: demo@harvestguard.com / demo123'}
-            </p>
           </div>
         </div>
       </section>

@@ -78,11 +78,19 @@ function Dashboard() {
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const navigate = useNavigate();
   
+  // Auto-set demo user - no authentication required
   useEffect(() => {
-    if (!getToken()) {
-      navigate('/login');
+    const demoUser = {
+      id: 'demo-farmer-001',
+      email: 'demo@harvestguard.com',
+      name: 'Demo Farmer',
+      preferredLanguage: lang
+    };
+    if (!user) {
+      setUser(demoUser);
+      localStorage.setItem('harvestguard_user', JSON.stringify(demoUser));
     }
-  }, [navigate]);
+  }, [lang, user]);
   
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -102,7 +110,7 @@ function Dashboard() {
       const localBatches = getBatches();
       setBatches(localBatches);
       
-      if (isOnline && getToken()) {
+      if (isOnline) {
         try {
           const data = await batchesApi.getAll();
           setBatches(data.batches);

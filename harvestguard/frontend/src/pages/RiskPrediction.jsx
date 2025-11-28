@@ -105,12 +105,8 @@ function RiskPrediction() {
   const navigate = useNavigate();
   
   useEffect(() => {
-    if (!getToken()) {
-      navigate('/login');
-      return;
-    }
     setBatches(getBatches());
-  }, [navigate]);
+  }, []);
   
   const toggleLang = () => {
     const newLang = lang === 'bn' ? 'en' : 'bn';

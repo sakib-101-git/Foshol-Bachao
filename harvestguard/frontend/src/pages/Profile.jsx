@@ -23,11 +23,18 @@ function Profile() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   
+  // No authentication required - auto-set demo user
   useEffect(() => {
-    if (!getToken()) {
-      navigate('/login');
+    if (!user) {
+      const demoUser = {
+        id: 'demo-farmer-001',
+        email: 'demo@harvestguard.com',
+        name: 'Demo Farmer',
+        preferredLanguage: getLanguage()
+      };
+      setUser(demoUser);
     }
-  }, [navigate]);
+  }, [user]);
   
   useEffect(() => {
     async function loadData() {

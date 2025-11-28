@@ -15,16 +15,18 @@ function getToken() {
  * Make an authenticated API request
  */
 async function apiRequest(endpoint, options = {}) {
-  const token = getToken();
+  // Auto-set token for all requests (no authentication required)
+  let token = getToken();
+  if (!token) {
+    token = 'demo-token-auto-login';
+    localStorage.setItem('harvestguard_token', token);
+  }
   
   const headers = {
     'Content-Type': 'application/json',
-    ...options.headers
+    ...options.headers,
+    'Authorization': `Bearer ${token}`
   };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
   
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {

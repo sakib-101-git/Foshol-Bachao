@@ -72,7 +72,10 @@ const analyzeImageWithAI = async (imageFile, apiToken) => {
       reader.readAsDataURL(imageFile);
     });
     
-    const token = localStorage.getItem('harvestguard_token') || localStorage.getItem('token');
+    const token = localStorage.getItem('harvestguard_token') || 'demo-token-auto-login';
+    if (!localStorage.getItem('harvestguard_token')) {
+      localStorage.setItem('harvestguard_token', token);
+    }
     const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
     
     console.log('Trying backend proxy...');
@@ -80,7 +83,7 @@ const analyzeImageWithAI = async (imageFile, apiToken) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ image: base64 })
     });
@@ -258,11 +261,19 @@ function CropScanner() {
     console.log('API Token check:', API_TOKEN ? 'Token found' : 'No token');
   }, []);
   
+  // No authentication required
   useEffect(() => {
-    if (!getToken()) {
-      navigate('/login');
+    // Auto-set demo user if needed
+    const storedUser = localStorage.getItem('harvestguard_user');
+    if (!storedUser) {
+      const demoUser = {
+        id: 'demo-farmer-001',
+        email: 'demo@harvestguard.com',
+        name: 'Demo Farmer'
+      };
+      localStorage.setItem('harvestguard_user', JSON.stringify(demoUser));
     }
-  }, [navigate]);
+  }, []);
   
   const toggleLang = () => {
     const newLang = lang === 'bn' ? 'en' : 'bn';

@@ -48,7 +48,7 @@ function Sidebar({ lang, onLangChange }) {
   const [isLogoutHovered, setIsLogoutHovered] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const isLoggedIn = !!getToken();
+  const isLoggedIn = true; // Always logged in - no authentication required
 
   const pages = getPages(lang);
   const currentPath = location.pathname;

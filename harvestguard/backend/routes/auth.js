@@ -87,10 +87,12 @@ module.exports = function(db) {
         });
       }
       
+      let user; // Declare user variable outside if/else blocks
+      
       // Special case: demo account - create if doesn't exist and allow login
       if (email === 'demo@harvestguard.com' && password === 'demo123') {
         let users = db.data.users || [];
-        let user = users.find(u => u.email === email);
+        user = users.find(u => u.email === email);
         
         // Create demo user if doesn't exist
         if (!user) {
@@ -113,7 +115,7 @@ module.exports = function(db) {
       } else {
         // Find user for other accounts
         const users = db.data.users || [];
-        const user = users.find(u => u.email === email);
+        user = users.find(u => u.email === email);
         
         if (!user) {
           return res.status(401).json({ 
@@ -133,7 +135,7 @@ module.exports = function(db) {
         }
       }
       
-      // Generate token
+      // Generate token (user is now accessible here)
       const token = generateToken(user);
       
       // Return user without password

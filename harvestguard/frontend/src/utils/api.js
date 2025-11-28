@@ -2,7 +2,7 @@
  * API Utilities - Backend communication functions
  */
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
 
 /**
  * Get auth token from localStorage
@@ -32,16 +32,20 @@ async function apiRequest(endpoint, options = {}) {
       headers
     });
     
-    const data = await response.json();
-    
     if (!response.ok) {
-      throw new Error(data.error || data.errorBn || 'Request failed');
+      const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(errorData.error || errorData.errorBn || `HTTP ${response.status}: Request failed`);
     }
     
+    const data = await response.json();
     return data;
   } catch (err) {
     console.error('API Error:', err);
-    throw err;
+    // Re-throw with more context
+    if (err.message) {
+      throw err;
+    }
+    throw new Error('Network error: Could not connect to server. Make sure backend is running on http://localhost:3001');
   }
 }
 

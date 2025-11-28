@@ -98,14 +98,14 @@ module.exports = function(db) {
         });
       }
       
-      // Check password
-      const isValid = await comparePassword(password, user.passwordHash);
-      
-      if (!isValid) {
-        // Special case: demo account with simple password check
-        if (email === 'demo@harvestguard.com' && password === 'demo123') {
-          // Allow demo login
-        } else {
+      // Special case: demo account - always allow with correct password
+      if (email === 'demo@harvestguard.com' && password === 'demo123') {
+        // Allow demo login without checking hash
+      } else {
+        // Check password for all other accounts
+        const isValid = await comparePassword(password, user.passwordHash);
+        
+        if (!isValid) {
           return res.status(401).json({ 
             error: 'Invalid credentials',
             errorBn: 'ভুল তথ্য'

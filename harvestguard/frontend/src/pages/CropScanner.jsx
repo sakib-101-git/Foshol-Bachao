@@ -73,7 +73,7 @@ const analyzeImageWithAI = async (imageFile, apiToken) => {
     });
     
     const token = localStorage.getItem('harvestguard_token') || localStorage.getItem('token');
-    const API_BASE = 'http://localhost:3001/api';
+    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
     
     console.log('Trying backend proxy...');
     const response = await fetch(`${API_BASE}/scanner/analyze`, {

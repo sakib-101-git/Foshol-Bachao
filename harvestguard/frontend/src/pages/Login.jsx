@@ -34,7 +34,9 @@ function Login() {
       saveUser(data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError(lang === 'bn' ? 'ভুল ইমেইল বা পাসওয়ার্ড' : 'Invalid email or password');
+      console.error('Login error:', err);
+      const errorMsg = err.message || (lang === 'bn' ? 'ভুল ইমেইল বা পাসওয়ার্ড' : 'Invalid email or password');
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -51,7 +53,9 @@ function Login() {
       saveUser(data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError(lang === 'bn' ? 'ডেমো লগইন ব্যর্থ' : 'Demo login failed');
+      console.error('Demo login error:', err);
+      const errorMsg = err.message || (lang === 'bn' ? 'ডেমো লগইন ব্যর্থ' : 'Demo login failed');
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

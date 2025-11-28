@@ -17,12 +17,22 @@ module.exports = function(db) {
     try {
       const { email, phone, password, name, preferredLanguage = 'bn' } = req.body;
       
+      console.log('Registration attempt:', { email, name });
+      
       // Basic validation
       if (!email || !password || !name) {
         return res.status(400).json({ 
           error: 'Missing required fields',
           errorBn: 'প্রয়োজনীয় তথ্য অনুপস্থিত'
         });
+      }
+      
+      // Ensure database structure exists
+      if (!db.data) {
+        db.data = { users: [], batches: [], badges: [], lossEvents: [] };
+      }
+      if (!db.data.users) {
+        db.data.users = [];
       }
       
       // Check if user exists
@@ -53,6 +63,8 @@ module.exports = function(db) {
       db.data.users.push(newUser);
       await db.write();
       
+      console.log('User registered successfully:', email);
+      
       // Generate token
       const token = generateToken(newUser);
       
@@ -68,7 +80,11 @@ module.exports = function(db) {
       
     } catch (err) {
       console.error('Register error:', err);
-      res.status(500).json({ error: 'Server error' });
+      console.error('Error stack:', err.stack);
+      res.status(500).json({ 
+        error: 'Server error',
+        message: err.message 
+      });
     }
   });
   
@@ -80,6 +96,8 @@ module.exports = function(db) {
     try {
       const { email, password } = req.body;
       
+      console.log('Login attempt:', { email, hasPassword: !!password });
+      
       if (!email || !password) {
         return res.status(400).json({ 
           error: 'Email and password required',
@@ -87,28 +105,49 @@ module.exports = function(db) {
         });
       }
       
+      // Ensure database structure exists
+      if (!db.data) {
+        db.data = { users: [], batches: [], badges: [], lossEvents: [] };
+      }
+      if (!db.data.users) {
+        db.data.users = [];
+      }
+      
       let user; // Declare user variable outside if/else blocks
       
       // Special case: demo account - create if doesn't exist and allow login
       if (email === 'demo@harvestguard.com' && password === 'demo123') {
+        console.log('Demo login attempt detected');
         let users = db.data.users || [];
         user = users.find(u => u.email === email);
         
         // Create demo user if doesn't exist
         if (!user) {
-          const passwordHash = await hashPassword('demo123');
-          user = {
-            id: 'demo-farmer-001',
-            email: 'demo@harvestguard.com',
-            phone: '+8801712345678',
-            passwordHash: passwordHash,
-            name: 'Demo Farmer',
-            preferredLanguage: 'bn',
-            createdAt: new Date().toISOString()
-          };
-          users.push(user);
-          db.data.users = users;
-          await db.write();
+          console.log('Creating demo user...');
+          try {
+            const passwordHash = await hashPassword('demo123');
+            user = {
+              id: 'demo-farmer-001',
+              email: 'demo@harvestguard.com',
+              phone: '+8801712345678',
+              passwordHash: passwordHash,
+              name: 'Demo Farmer',
+              preferredLanguage: 'bn',
+              createdAt: new Date().toISOString()
+            };
+            users.push(user);
+            db.data.users = users;
+            await db.write();
+            console.log('Demo user created successfully');
+          } catch (dbError) {
+            console.error('Error creating demo user:', dbError);
+            return res.status(500).json({ 
+              error: 'Failed to create demo user',
+              details: dbError.message 
+            });
+          }
+        } else {
+          console.log('Demo user already exists');
         }
         
         // Allow demo login without checking hash
@@ -118,6 +157,7 @@ module.exports = function(db) {
         user = users.find(u => u.email === email);
         
         if (!user) {
+          console.log('User not found:', email);
           return res.status(401).json({ 
             error: 'Invalid credentials',
             errorBn: 'ভুল তথ্য'
@@ -128,6 +168,7 @@ module.exports = function(db) {
         const isValid = await comparePassword(password, user.passwordHash);
         
         if (!isValid) {
+          console.log('Password invalid for:', email);
           return res.status(401).json({ 
             error: 'Invalid credentials',
             errorBn: 'ভুল তথ্য'
@@ -136,11 +177,18 @@ module.exports = function(db) {
       }
       
       // Generate token (user is now accessible here)
+      if (!user) {
+        console.error('User is null after login logic');
+        return res.status(500).json({ error: 'Login failed - user not found' });
+      }
+      
+      console.log('Generating token for user:', user.email);
       const token = generateToken(user);
       
       // Return user without password
       const { passwordHash: _, ...userWithoutPassword } = user;
       
+      console.log('Login successful for:', email);
       res.json({
         message: 'Login successful',
         messageBn: 'লগইন সফল',
@@ -150,7 +198,11 @@ module.exports = function(db) {
       
     } catch (err) {
       console.error('Login error:', err);
-      res.status(500).json({ error: 'Server error' });
+      console.error('Error stack:', err.stack);
+      res.status(500).json({ 
+        error: 'Server error',
+        message: err.message 
+      });
     }
   });
   

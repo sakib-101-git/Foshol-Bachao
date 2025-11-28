@@ -14,66 +14,78 @@ These losses contribute to food insecurity, economic waste, and environmental im
 
 **Foshol Bachao** empowers farmers with a lightweight, bilingual (Bangla/English) web app to:
 - Log and track paddy batches with storage details
-- View local 5-day weather forecasts
+- View local weather forecasts for Chittagong, Dhaka, and Sylhet
+- Predict crop loss risks based on weather and storage conditions
+- Detect crop diseases using AI-powered image scanning
 - Receive actionable Bangla advisories
 - Work offline and sync when connected
-- Export data as CSV/JSON
+- Export comprehensive reports as PDF (English/Bangla)
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend (React)                  │
-│  ┌─────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐  │
-│  │ Landing │ │Dashboard │ │Weather │ │ Profile  │  │
-│  │  (3D)   │ │          │ │        │ │          │  │
-│  └────┬────┘ └────┬─────┘ └───┬────┘ └────┬─────┘  │
-│       │           │           │           │         │
-│  ┌────┴───────────┴───────────┴───────────┴────┐   │
-│  │              LocalStorage (offline)          │   │
-│  └──────────────────────┬──────────────────────┘   │
-└─────────────────────────┼───────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    Frontend (React)                       │
+│  ┌─────────┐ ┌──────────┐ ┌────────┐ ┌──────────────┐  │
+│  │ Landing │ │Dashboard │ │Weather │ │ RiskPrediction│  │
+│  └────┬────┘ └────┬─────┘ └───┬────┘ └──────┬───────┘  │
+│       │           │           │             │           │
+│  ┌────┴─────┐ ┌──┴───────────┴──────────────┴────┐     │
+│  │CropScanner│ │ Profile  │  Login/Register        │     │
+│  │   (AI)    │ └────┬─────┘ └─────┬───────────────┘     │
+│  └────┬─────┘       │             │                     │
+│       │             │             │                     │
+│  ┌────┴─────────────┴─────────────┴───────────────┐    │
+│  │           LocalStorage (offline-first)           │    │
+│  └──────────────────────┬──────────────────────────┘    │
+└─────────────────────────┼───────────────────────────────┘
                           │ HTTP/REST
-┌─────────────────────────┼───────────────────────────┐
-│                    Backend (Express)                 │
-│  ┌─────────┐ ┌────────┐ ┌─────────┐ ┌──────────┐   │
-│  │  Auth   │ │Batches │ │ Weather │ │  Export  │   │
-│  │(bcrypt) │ │ (CRUD) │ │  (API)  │ │(CSV/JSON)│   │
-│  └────┬────┘ └───┬────┘ └────┬────┘ └────┬─────┘   │
-│       │          │           │           │          │
-│  ┌────┴──────────┴───────────┴───────────┴─────┐   │
-│  │              lowdb (db.json)                 │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────┼───────────────────────────────┐
+│                    Backend (Express)                     │
+│  ┌─────────┐ ┌────────┐ ┌────────┐ ┌─────────┐         │
+│  │  Auth   │ │Batches │ │ Weather│ │ Scanner │         │
+│  │(bcrypt) │ │ (CRUD) │ │  (API) │ │  (AI)   │         │
+│  └────┬────┘ └───┬────┘ └────┬───┘ └────┬────┘         │
+│       │          │           │          │               │
+│  ┌────┴──────────┴───────────┴──────────┴───────────┐  │
+│  │              lowdb (db.json)                      │  │
+│  └───────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## ✨ Key Features
 
-### A1: Storytelling Landing Page
-- ✅ Immersive 3D rice field scene (Three.js + React Three Fiber)
-- ✅ Bilingual (English/Bangla) content
-- ✅ Problem statistics with visual impact
-- ✅ SDG 12 integration
-- ✅ Animated workflow: Data → Warning → Action → Saved Food
-- ✅ Mobile-first design with large tap targets
-- ✅ Smooth scroll animations
-
 ### A2: Farmer & Crop Management
 - ✅ Secure registration/login (bcrypt + JWT)
-- ✅ Add paddy batches with weight, date, location, storage
-- ✅ Offline-first with LocalStorage
-- ✅ Manual sync button
-- ✅ CSV and JSON export
+- ✅ Add, edit, and delete paddy batches with weight, date, location, storage
+- ✅ Offline-first with LocalStorage - works without internet
+- ✅ Automatic sync when online
+- ✅ Comprehensive PDF reports (English/Bangla)
 - ✅ Achievement badges
+- ✅ Loss event tracking and success rate calculation
 
 ### A3: Weather Integration
-- ✅ 5-day forecast for selected Upazila
-- ✅ Bangla advisories based on conditions
-- ✅ Visual weather icons
+- ✅ Weather forecasts for Chittagong, Dhaka, and Sylhet
+- ✅ Current conditions (temperature, humidity, rain probability)
+- ✅ Weather data integrated into risk prediction
+
+### A4: Risk Prediction & ETCL Model
+- ✅ Risk analysis for each crop batch
+- ✅ Risk scoring based on weather and storage conditions
+- ✅ ETCL (Estimated Time to Critical Loss) calculation
+- ✅ Visual risk indicators (low/medium/high/critical)
+- ✅ Real-time weather integration per batch location
+
+### A5: AI Crop Health Scanner
+- ✅ Upload crop photos for disease detection
+- ✅ AI-powered analysis using Hugging Face model
+- ✅ Disease detection with confidence scores
+- ✅ Bilingual recommendations (English/Bangla)
+- ✅ Demo mode fallback when API unavailable
 
 ---
 
@@ -123,62 +135,87 @@ Open http://localhost:5173
 ```
 harvestguard/
 ├── backend/
-│   ├── index.js              # Express server
+│   ├── index.js              # Express server entry point
 │   ├── routes/               # API endpoints
-│   ├── utils/                # bcrypt + JWT
-│   └── db/                   # JSON database
+│   │   ├── auth.js          # Authentication (login/register)
+│   │   ├── batches.js       # Batch CRUD operations
+│   │   ├── weather.js       # Weather data proxy
+│   │   ├── scanner.js       # AI scanner proxy
+│   │   └── export.js        # Data export endpoints
+│   ├── utils/                # Backend utilities
+│   │   ├── jwt.js           # JWT token handling
+│   │   └── hash.js          # Password hashing (bcrypt)
+│   └── db/                   # JSON database files
+│       └── db.json          # Main database
 │
 ├── frontend/
-│   ├── index.html
+│   ├── index.html           # HTML template
 │   └── src/
-│       ├── components/
-│       │   ├── Scene3D.jsx   # 3D rice field (Three.js)
-│       │   ├── Header.jsx
-│       │   ├── BatchCard.jsx
-│       │   └── WeatherWidget.jsx
-│       ├── pages/
-│       │   ├── Landing.jsx   # Storytelling page
-│       │   ├── Login.jsx     # 3D background
-│       │   ├── Register.jsx
-│       │   ├── Dashboard.jsx
-│       │   ├── Weather.jsx
-│       │   └── Profile.jsx
-│       └── utils/
-│           ├── api.js
-│           ├── localSync.js
-│           └── translations.js
+│       ├── main.jsx         # Application entry point
+│       ├── App.jsx          # Routing configuration
+│       ├── index.css        # Global styles
+│       ├── components/      # Reusable UI components
+│       │   ├── Sidebar.jsx          # Navigation sidebar
+│       │   ├── BatchCard.jsx        # Batch display card
+│       │   ├── BatchForm.jsx        # Batch add/edit form
+│       │   ├── WeatherWidget.jsx    # Weather display
+│       │   ├── LanguageToggle.jsx   # Language switcher
+│       │   ├── LanguageSelectionModal.jsx # PDF language selector
+│       │   ├── SyncBanner.jsx       # Sync status banner
+│       │   ├── BadgeList.jsx        # Achievement badges
+│       │   ├── LandingHero.jsx      # Landing hero section
+│       │   └── OnboardingSlides.jsx # Tutorial slides
+│       ├── pages/           # Page components
+│       │   ├── Landing.jsx         # Landing/home page
+│       │   ├── Login.jsx           # Login page
+│       │   ├── Register.jsx        # Registration page
+│       │   ├── Dashboard.jsx       # Main dashboard
+│       │   ├── Weather.jsx         # Weather page
+│       │   ├── RiskPrediction.jsx  # Risk analysis page
+│       │   ├── CropScanner.jsx     # AI crop scanner
+│       │   └── Profile.jsx         # User profile
+│       └── utils/           # Utility functions
+│           ├── api.js              # Backend API calls
+│           ├── localSync.js        # Offline storage
+│           ├── translations.js     # Language translations
+│           ├── csvExport.js        # CSV/PDF export
+│           └── pdfGenerator.js     # PDF generation (Bangla support)
 │
 └── README.md
 ```
 
 ---
 
-## 🎯 Demo Script (90 seconds)
+## 🎯 Demo Script (2 minutes)
 
 1. **Landing Page** (20s)
-   - Show 3D rice field animation
+   - Show landing page
    - Toggle language (EN/বাংলা)
-   - Scroll through problem statistics
-   - Show SDG 12 section
+   - Explain the problem
 
-2. **Registration/Login** (15s)
-   - Use Demo Login button
-   - Show 3D background
+2. **Login** (10s)
+   - Use demo credentials to login
 
-3. **Dashboard** (25s)
+3. **Dashboard** (30s)
    - View existing batches
    - Add new batch with form
-   - Show sync status
+   - Show sync status (offline-first)
+   - Download comprehensive PDF report
 
-4. **Weather** (15s)
-   - Select upazila
-   - View 5-day forecast
-   - Read Bangla advisory
+4. **Risk Prediction** (25s)
+   - Select a batch
+   - Show risk analysis
+   - Explain risk calculation based on weather
 
-5. **Export & Profile** (15s)
-   - Download CSV
-   - View badges
-   - Logout
+5. **Crop Scanner** (25s)
+   - Upload crop photo
+   - Show AI analysis
+   - Display recommendations
+
+6. **Weather & Profile** (20s)
+   - Show weather for locations
+   - View profile with statistics
+   - Show achievement badges
 
 ---
 
@@ -188,8 +225,11 @@ harvestguard/
 
 Foshol Bachao directly contributes to this goal by:
 - Enabling farmers to track and manage harvests
+- Predicting crop loss risks with ETCL model
+- Detecting crop diseases early using AI
 - Providing weather-based advisories to prevent spoilage
 - Creating data for better decision-making
+- Supporting offline access for rural areas
 
 ---
 
@@ -205,5 +245,5 @@ Foshol Bachao Team
 
 ---
 
-*"ফসল লগ করুন। আবহাওয়া দেখুন। শস্য রক্ষা করুন।"*  
-*"Log your harvest. Check the weather. Protect your grain."*
+*"ফসল লগ করুন। ঝুঁকি জানুন। রোগ সনাক্ত করুন। শস্য রক্ষা করুন।"*  
+*"Log your harvest. Know the risks. Detect diseases. Protect your grain."*

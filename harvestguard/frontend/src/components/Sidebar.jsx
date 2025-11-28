@@ -1,10 +1,11 @@
+/**
+ * Sidebar Navigation Component
+ */
+
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getToken, clearAll } from '../utils/localSync';
 
-/**
- * Navigation pages
- */
 const getPages = (lang) => [
   {
     id: 'dashboard',

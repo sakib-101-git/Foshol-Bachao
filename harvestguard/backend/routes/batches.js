@@ -188,6 +188,111 @@ module.exports = function(db) {
   });
   
   /**
+   * POST /api/batches/:id/record-loss
+   * Record a loss event for a batch
+   */
+  router.post('/:id/record-loss', authMiddleware, async (req, res) => {
+    try {
+      const batches = db.data.batches || [];
+      const index = batches.findIndex(b => b.id === req.params.id && b.userId === req.user.id);
+      
+      if (index === -1) {
+        return res.status(404).json({ error: 'Batch not found' });
+      }
+      
+      const { lossWeightKg, lossDate, lossReason, notes } = req.body;
+      
+      if (!lossWeightKg || !lossDate) {
+        return res.status(400).json({ 
+          error: 'Loss weight and date required',
+          errorBn: 'ক্ষতি ওজন এবং তারিখ প্রয়োজন'
+        });
+      }
+      
+      const lossWeight = Number(lossWeightKg);
+      const estimatedWeight = db.data.batches[index].estimatedWeightKg || 0;
+      
+      if (lossWeight > estimatedWeight) {
+        return res.status(400).json({ 
+          error: 'Loss cannot exceed estimated weight',
+          errorBn: 'ক্ষতি আনুমানিক ওজনের চেয়ে বেশি হতে পারে না'
+        });
+      }
+      
+      // Record loss event
+      const lossEvent = {
+        id: uuidv4(),
+        batchId: req.params.id,
+        lossWeightKg: lossWeight,
+        lossDate,
+        lossReason: lossReason || 'Other',
+        notes: notes || '',
+        recordedAt: new Date().toISOString()
+      };
+      
+      // Initialize lossEvents array if it doesn't exist
+      if (!db.data.lossEvents) {
+        db.data.lossEvents = [];
+      }
+      
+      db.data.lossEvents.push(lossEvent);
+      
+      // Update batch with total loss
+      if (!db.data.batches[index].totalLossKg) {
+        db.data.batches[index].totalLossKg = 0;
+      }
+      db.data.batches[index].totalLossKg += lossWeight;
+      db.data.batches[index].lastLossDate = lossDate;
+      
+      // Calculate saved weight
+      db.data.batches[index].savedWeightKg = estimatedWeight - db.data.batches[index].totalLossKg;
+      
+      // Update status to 'completed' if all weight is lost
+      if (db.data.batches[index].totalLossKg >= estimatedWeight) {
+        db.data.batches[index].status = 'completed';
+      }
+      
+      db.data.batches[index].updatedAt = new Date().toISOString();
+      
+      await db.write();
+      
+      res.json({
+        message: 'Loss recorded',
+        messageBn: 'ক্ষতি রেকর্ড করা হয়েছে',
+        lossEvent,
+        batch: db.data.batches[index]
+      });
+      
+    } catch (err) {
+      console.error('Record loss error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  /**
+   * GET /api/batches/:id/loss-events
+   * Get loss events for a batch
+   */
+  router.get('/:id/loss-events', authMiddleware, async (req, res) => {
+    try {
+      const batches = db.data.batches || [];
+      const batch = batches.find(b => b.id === req.params.id && b.userId === req.user.id);
+      
+      if (!batch) {
+        return res.status(404).json({ error: 'Batch not found' });
+      }
+      
+      const lossEvents = (db.data.lossEvents || []).filter(e => e.batchId === req.params.id);
+      
+      res.json({ lossEvents });
+      
+    } catch (err) {
+      console.error('Get loss events error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  /**
    * DELETE /api/batches/:id
    * Delete a batch
    */
@@ -210,6 +315,39 @@ module.exports = function(db) {
       
     } catch (err) {
       console.error('Delete batch error:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  /**
+   * GET /api/batches/stats/loss
+   * Get loss statistics for user
+   */
+  router.get('/stats/loss', authMiddleware, async (req, res) => {
+    try {
+      const batches = db.data.batches || [];
+      const userBatches = batches.filter(b => b.userId === req.user.id);
+      const lossEvents = (db.data.lossEvents || []).filter(e => 
+        userBatches.some(b => b.id === e.batchId)
+      );
+      
+      const totalHarvested = userBatches.reduce((sum, b) => sum + (b.estimatedWeightKg || 0), 0);
+      const totalLost = userBatches.reduce((sum, b) => sum + (b.totalLossKg || 0), 0);
+      const totalSaved = totalHarvested - totalLost;
+      const successRate = totalHarvested > 0 ? ((totalSaved / totalHarvested) * 100).toFixed(1) : 100;
+      
+      res.json({
+        totalHarvested,
+        totalLost,
+        totalSaved,
+        successRate: parseFloat(successRate),
+        lossEventsCount: lossEvents.length,
+        batchesCount: userBatches.length,
+        activeBatches: userBatches.filter(b => b.status === 'active').length
+      });
+      
+    } catch (err) {
+      console.error('Get loss stats error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   });

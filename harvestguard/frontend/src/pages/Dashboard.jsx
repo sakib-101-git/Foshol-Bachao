@@ -1,3 +1,7 @@
+/**
+ * Dashboard - Main crop batch management page
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { batches as batchesApi } from '../utils/api';
@@ -14,7 +18,9 @@ import {
   addUnsyncedBatch,
   generateId
 } from '../utils/localSync';
-import { exportBatchesPDF } from '../utils/csvExport';
+import { exportComprehensivePDF } from '../utils/csvExport';
+import { weather } from '../utils/api';
+import LanguageSelectionModal from '../components/LanguageSelectionModal';
 import { t } from '../utils/translations';
 import Sidebar from '../components/Sidebar';
 import BatchCard from '../components/BatchCard';
@@ -22,9 +28,44 @@ import BatchForm from '../components/BatchForm';
 import SyncBanner from '../components/SyncBanner';
 import LanguageToggle from '../components/LanguageToggle';
 
-/**
- * Main dashboard - Crop Management
- */
+// Calculate risk score based on weather and storage conditions
+const calculateRisk = (batch, weather) => {
+  let riskScore = 0;
+  
+  const temp = weather?.temperature || 28;
+  if (temp > 35) riskScore += 30;
+  else if (temp > 32) riskScore += 15;
+  
+  const humidity = weather?.humidity || 70;
+  if (humidity > 85) riskScore += 35;
+  else if (humidity > 75) riskScore += 20;
+  
+  const rainChance = weather?.rainProbability || 20;
+  if (rainChance > 70) riskScore += 25;
+  else if (rainChance > 40) riskScore += 10;
+  
+  if (batch.storageType === 'Open Area') riskScore += 25;
+  else if (batch.storageType === 'Jute Bag Stack') riskScore += 10;
+  
+  const harvestDate = new Date(batch.harvestDate);
+  const today = new Date();
+  const daysSinceHarvest = Math.floor((today - harvestDate) / (1000 * 60 * 60 * 24));
+  if (daysSinceHarvest > 30) riskScore += 15;
+  
+  let etclHours = riskScore >= 70 ? 24 : riskScore >= 50 ? 72 : riskScore >= 30 ? 168 : 336;
+  
+  return {
+    score: Math.min(riskScore, 100),
+    level: riskScore >= 70 ? 'critical' : riskScore >= 50 ? 'high' : riskScore >= 30 ? 'medium' : 'low',
+    etclHours
+  };
+};
+
+// Get location from batch
+const getLocationForBatch = (batch) => {
+  return batch.upazila || batch.district || batch.division || 'Sreepur';
+};
+
 function Dashboard() {
   const [lang, setLang] = useState(getLanguage());
   const [user, setUser] = useState(getUser());
@@ -33,6 +74,8 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -220,10 +263,54 @@ function Dashboard() {
           </button>
           <button 
             style={styles.outlineBtn}
-            onClick={() => exportBatchesPDF(batches, lang, user?.name)}
+            onClick={() => setShowLangModal(true)}
+            disabled={generatingPDF || batches.length === 0}
           >
-            {lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}
+            {generatingPDF 
+              ? (lang === 'bn' ? 'প্রস্তুত হচ্ছে...' : 'Generating...')
+              : (lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report')
+            }
           </button>
+          
+          {/* Language Selection Modal */}
+          <LanguageSelectionModal
+            isOpen={showLangModal}
+            onClose={() => setShowLangModal(false)}
+            onSelect={async (selectedLang) => {
+              setGeneratingPDF(true);
+              try {
+                // Helper to get weather for a batch
+                const getWeatherForBatch = async (batch) => {
+                  try {
+                    const location = getLocationForBatch(batch);
+                    const weatherData = await weather.get(location, selectedLang);
+                    return {
+                      temperature: weatherData.current?.temp || 28,
+                      humidity: weatherData.current?.humidity || 70,
+                      rainProbability: weatherData.forecast?.[0]?.rainProbability || 20
+                    };
+                  } catch (err) {
+                    console.error('Weather fetch error:', err);
+                    return null;
+                  }
+                };
+                
+                await exportComprehensivePDF(
+                  batches,
+                  selectedLang,
+                  user?.name || 'Farmer',
+                  calculateRisk,
+                  getWeatherForBatch
+                );
+              } catch (err) {
+                console.error('PDF generation error:', err);
+                alert(lang === 'bn' ? 'PDF তৈরি করতে ত্রুটি হয়েছে' : 'Error generating PDF');
+              } finally {
+                setGeneratingPDF(false);
+              }
+            }}
+            currentLang={lang}
+          />
         </div>
         
         {/* Add Form */}
@@ -347,9 +434,69 @@ const styles = {
   },
   statsGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '12px',
     marginBottom: '20px'
+  },
+  chartsSection: {
+    marginBottom: '24px'
+  },
+  chartsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '16px',
+    marginBottom: '20px'
+  },
+  chartCard: {
+    background: '#ffffff',
+    borderRadius: '12px',
+    padding: '20px',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
+    border: '2px solid #bbf7d0'
+  },
+  lossPreventionCard: {
+    background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+    borderRadius: '12px',
+    padding: '20px',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
+    border: '2px solid #bbf7d0'
+  },
+  lossPreventionTitle: {
+    fontSize: '1.1rem',
+    fontWeight: '600',
+    color: '#1a3d1a',
+    marginBottom: '16px',
+    paddingBottom: '10px',
+    borderBottom: '2px solid #c9a227'
+  },
+  lossPreventionGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: '16px'
+  },
+  lossPreventionItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    background: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: '10px'
+  },
+  lossPreventionIcon: {
+    fontSize: '1.8rem',
+    width: '50px',
+    textAlign: 'center'
+  },
+  lossPreventionValue: {
+    fontSize: '1.2rem',
+    fontWeight: '700',
+    color: '#1f2937',
+    lineHeight: '1.2'
+  },
+  lossPreventionLabel: {
+    fontSize: '0.85rem',
+    color: '#6b7280',
+    marginTop: '4px'
   },
   statCard: {
     background: '#ffffff',
@@ -434,7 +581,51 @@ const styles = {
   emptyText: {
     color: '#6b7280',
     fontSize: '1rem'
+  },
+  exportDropdown: {
+    position: 'relative'
+  },
+  exportMenu: {
+    display: 'none',
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: '4px',
+    background: '#ffffff',
+    borderRadius: '10px',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+    border: '2px solid #bbf7d0',
+    zIndex: 1000,
+    minWidth: '200px',
+    overflow: 'hidden'
+  },
+  exportMenuItem: {
+    width: '100%',
+    padding: '12px 16px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    background: '#ffffff',
+    color: '#1a3d1a',
+    border: 'none',
+    borderBottom: '1px solid #e5e7eb',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    textAlign: 'left',
+    transition: 'background 0.2s ease'
   }
 };
+
+// Add hover effect for export menu items
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .export-menu-item:hover {
+        background: #f0fdf4 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  });
+}
 
 export default Dashboard;

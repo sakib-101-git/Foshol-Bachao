@@ -1,3 +1,7 @@
+/**
+ * Main App Component - Routing Configuration
+ */
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -8,16 +12,6 @@ import Profile from './pages/Profile';
 import RiskPrediction from './pages/RiskPrediction';
 import CropScanner from './pages/CropScanner';
 
-/**
- * Main App component
- * Routing for HarvestGuard / Foshol Bachao
- * 
- * Features:
- * A2 - Farmer + Crop Management (Dashboard, Profile, Batches)
- * A3 - Hyper-Local Weather Forecast (Weather)
- * A4 - Risk Prediction + ETCL Model (RiskPrediction)
- * A5 - Crop Health Scanner AI (CropScanner)
- */
 function App() {
   return (
     <Router>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getToken, getLanguage, saveLanguage, getBatches } from '../utils/localSync';
 import { translations } from '../utils/translations';
+import { weather } from '../utils/api';
 import Sidebar from '../components/Sidebar';
 
 /**
@@ -66,11 +67,19 @@ const calculateRisk = (batch, weather) => {
   };
 };
 
-const getMockWeather = () => ({
-  temperature: 31,
-  humidity: 78,
-  rainProbability: 45
-});
+// Get location name from batch for weather lookup
+const getLocationForBatch = (batch) => {
+  if (batch.upazila && batch.upazila.trim()) {
+    return batch.upazila;
+  }
+  if (batch.district && batch.district.trim()) {
+    return batch.district;
+  }
+  if (batch.division && batch.division.trim()) {
+    return batch.division;
+  }
+  return 'Sreepur'; // Default fallback
+};
 
 const getCropType = (type, lang) => {
   if (translations.crops && translations.crops[type]) {
@@ -91,7 +100,8 @@ function RiskPrediction() {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [riskAnalysis, setRiskAnalysis] = useState(null);
-  const [weather] = useState(getMockWeather());
+  const [weatherData, setWeatherData] = useState(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -108,9 +118,35 @@ function RiskPrediction() {
     saveLanguage(newLang);
   };
   
-  const analyzeBatch = (batch) => {
+  const analyzeBatch = async (batch) => {
     setSelectedBatch(batch);
-    setRiskAnalysis(calculateRisk(batch, weather));
+    setLoadingWeather(true);
+    setRiskAnalysis(null);
+    
+    try {
+      // Fetch real weather for batch location
+      const location = getLocationForBatch(batch);
+      const weatherResponse = await weather.get(location, lang);
+      const currentWeather = weatherResponse.current || weatherResponse.forecast?.[0];
+      
+      // Format weather data for risk calculation
+      const weatherForRisk = {
+        temperature: currentWeather?.temp || 28,
+        humidity: currentWeather?.humidity || 70,
+        rainProbability: currentWeather?.rainProbability || 20
+      };
+      
+      setWeatherData(weatherForRisk);
+      setRiskAnalysis(calculateRisk(batch, weatherForRisk));
+    } catch (err) {
+      console.error('Failed to fetch weather:', err);
+      // Fallback to default weather if API fails
+      const fallbackWeather = { temperature: 28, humidity: 70, rainProbability: 20 };
+      setWeatherData(fallbackWeather);
+      setRiskAnalysis(calculateRisk(batch, fallbackWeather));
+    } finally {
+      setLoadingWeather(false);
+    }
   };
   
   const getRiskColor = (level) => {
@@ -149,26 +185,37 @@ function RiskPrediction() {
             : 'Analyze crop spoilage risk based on weather conditions'}
         </p>
         
-        {/* Weather */}
-        <div style={styles.weatherCard}>
-          <h3 style={styles.weatherTitle}>
-            {lang === 'bn' ? 'বর্তমান আবহাওয়া' : 'Current Weather'}
-          </h3>
-          <div style={styles.weatherGrid}>
-            <div style={styles.weatherItem}>
-              <span style={styles.weatherValue}>{weather.temperature}°C</span>
-              <span style={styles.weatherLabel}>{lang === 'bn' ? 'তাপমাত্রা' : 'Temp'}</span>
-            </div>
-            <div style={styles.weatherItem}>
-              <span style={styles.weatherValue}>{weather.humidity}%</span>
-              <span style={styles.weatherLabel}>{lang === 'bn' ? 'আর্দ্রতা' : 'Humidity'}</span>
-            </div>
-            <div style={styles.weatherItem}>
-              <span style={styles.weatherValue}>{weather.rainProbability}%</span>
-              <span style={styles.weatherLabel}>{lang === 'bn' ? 'বৃষ্টি' : 'Rain'}</span>
-            </div>
+        {/* Weather - Show when batch is selected */}
+        {selectedBatch && weatherData && (
+          <div style={styles.weatherCard}>
+            <h3 style={styles.weatherTitle}>
+              {lang === 'bn' ? 'বর্তমান আবহাওয়া' : 'Current Weather'}
+              <span style={styles.locationTag}>
+                ({getLocationForBatch(selectedBatch)})
+              </span>
+            </h3>
+            {loadingWeather ? (
+              <div style={styles.loadingText}>
+                {lang === 'bn' ? 'আবহাওয়া লোড হচ্ছে...' : 'Loading weather...'}
+              </div>
+            ) : (
+              <div style={styles.weatherGrid}>
+                <div style={styles.weatherItem}>
+                  <span style={styles.weatherValue}>{weatherData.temperature}°C</span>
+                  <span style={styles.weatherLabel}>{lang === 'bn' ? 'তাপমাত্রা' : 'Temp'}</span>
+                </div>
+                <div style={styles.weatherItem}>
+                  <span style={styles.weatherValue}>{weatherData.humidity}%</span>
+                  <span style={styles.weatherLabel}>{lang === 'bn' ? 'আর্দ্রতা' : 'Humidity'}</span>
+                </div>
+                <div style={styles.weatherItem}>
+                  <span style={styles.weatherValue}>{weatherData.rainProbability}%</span>
+                  <span style={styles.weatherLabel}>{lang === 'bn' ? 'বৃষ্টি' : 'Rain'}</span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
         
         {/* Batch Selection */}
         <div style={styles.section}>
@@ -197,6 +244,9 @@ function RiskPrediction() {
                   </div>
                   <div style={styles.batchBottom}>
                     <span>{getStorageType(batch.storageType, lang)}</span>
+                    <span style={styles.batchLocation}>
+                      📍 {batch.upazila || batch.district || batch.division || 'N/A'}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -516,6 +566,23 @@ const styles = {
     color: '#166534',
     fontSize: '0.9rem',
     lineHeight: '1.8'
+  },
+  locationTag: {
+    fontSize: '0.85rem',
+    color: '#bbf7d0',
+    fontWeight: '400',
+    marginLeft: '8px'
+  },
+  loadingText: {
+    textAlign: 'center',
+    color: '#bbf7d0',
+    padding: '20px'
+  },
+  batchLocation: {
+    fontSize: '0.75rem',
+    color: '#9ca3af',
+    marginTop: '4px',
+    display: 'block'
   }
 };
 

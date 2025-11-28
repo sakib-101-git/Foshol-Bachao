@@ -1,6 +1,5 @@
 /**
- * API utility functions for HarvestGuard
- * Handles all communication with the backend
+ * API Utilities - Backend communication functions
  */
 
 const API_BASE = 'http://localhost:3001/api';
@@ -90,7 +89,19 @@ export const batches = {
     apiRequest('/sync', {
       method: 'POST',
       body: JSON.stringify({ unsyncedBatches })
-    })
+    }),
+  
+  recordLoss: (id, lossData) =>
+    apiRequest(`/batches/${id}/record-loss`, {
+      method: 'POST',
+      body: JSON.stringify(lossData)
+    }),
+  
+  getLossEvents: (id) =>
+    apiRequest(`/batches/${id}/loss-events`),
+  
+  getLossStats: () =>
+    apiRequest('/batches/stats/loss')
 };
 
 // Weather API

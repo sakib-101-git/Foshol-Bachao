@@ -1,6 +1,5 @@
 /**
- * Local storage and offline sync utilities
- * Handles offline-first data management
+ * Local Storage & Offline Sync Utilities
  */
 
 const STORAGE_KEYS = {

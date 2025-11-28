@@ -1,16 +1,13 @@
+/**
+ * Crop Health Scanner - AI-powered disease detection
+ */
+
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getToken, getLanguage, saveLanguage } from '../utils/localSync';
 import Sidebar from '../components/Sidebar';
 
-/**
- * Crop Health Scanner using Hugging Face AI
- */
-
-// Plant Disease Detection - Using a more reliable model
-// Using CORS proxy to avoid backend routing issues
 const API_URL = "https://api-inference.huggingface.co/models/Mozilla-MobileNetV2-PlantDisease";
-const CORS_PROXY = "https://cors-anywhere.herokuapp.com/"; // Fallback proxy
 
 // Convert file to base64
 const fileToBase64 = (file) => {
@@ -316,63 +313,26 @@ function CropScanner() {
       setAnalyzing(false);
     } catch (err) {
       console.error('Analysis error:', err);
+      const errors = {
+        'NO_TOKEN': lang === 'bn' ? 'API টোকেন সেট করা হয়নি।' : 'API token not set.',
+        'RATE_LIMIT': lang === 'bn' ? 'অনেক অনুরোধ করা হয়েছে। অপেক্ষা করুন।' : 'Too many requests. Please wait.',
+        'MODEL_NOT_FOUND': lang === 'bn' ? 'মডেল পাওয়া যায়নি।' : 'Model not found.'
+      };
       
-      if (err.message === 'NO_TOKEN') {
-        setError(lang === 'bn' 
-          ? 'API টোকেন সেট করা হয়নি। .env ফাইলে VITE_HF_TOKEN যোগ করুন।' 
-          : 'API token not set. Add VITE_HF_TOKEN to .env file.');
-        setAnalyzing(false);
-      } else if (err.message.startsWith('MODEL_LOADING:')) {
+      if (err.message.startsWith('MODEL_LOADING:')) {
         const time = parseInt(err.message.split(':')[1]);
         setModelLoading(true);
         setLoadingTime(time);
-        // Retry after model loads
         setTimeout(() => {
           setModelLoading(false);
           handleAnalyze();
         }, (time + 2) * 1000);
-      } else if (err.message.startsWith('INVALID_TOKEN:')) {
-        const msg = err.message.split(':')[1] || '';
-        setError(lang === 'bn' 
-          ? `API টোকেন অবৈধ: ${msg}. নতুন টোকেন তৈরি করুন।` 
-          : `Invalid API token: ${msg}. Please create a new token.`);
-        setAnalyzing(false);
-      } else if (err.message.startsWith('RATE_LIMIT:')) {
-        setError(lang === 'bn' 
-          ? 'অনেক অনুরোধ করা হয়েছে। কিছুক্ষণ অপেক্ষা করুন।' 
-          : 'Too many requests. Please wait a moment.');
-        setAnalyzing(false);
-      } else if (err.message.startsWith('NETWORK_ERROR:')) {
-        const msg = err.message.split(':')[1] || '';
-        setError(lang === 'bn' 
-          ? `নেটওয়ার্ক ত্রুটি: ${msg}. ইন্টারনেট সংযোগ পরীক্ষা করুন।` 
-          : `Network error: ${msg}. Check your internet connection.`);
-        setAnalyzing(false);
-      } else if (err.message.startsWith('NOT_FOUND:')) {
-        const msg = err.message.split(':')[1] || '';
-        setError(lang === 'bn' 
-          ? `ব্যাকএন্ড পাওয়া যায়নি: ${msg}. ব্যাকএন্ড সার্ভার চালু আছে কিনা পরীক্ষা করুন।` 
-          : `Backend not found: ${msg}. Make sure backend server is running.`);
-        setAnalyzing(false);
-      } else if (err.message.startsWith('MODEL_NOT_FOUND:')) {
-        setError(lang === 'bn' 
-          ? 'মডেল পাওয়া যায়নি। বিকল্প মডেল চেষ্টা করা হচ্ছে...' 
-          : 'Model not found. Trying alternative model...');
-        setAnalyzing(false);
-      } else if (err.message.startsWith('API_ERROR:')) {
-        const errorParts = err.message.split(':');
-        const errorDetail = errorParts.length > 1 ? errorParts.slice(1).join(':') : '';
-        setError(lang === 'bn' 
-          ? `API ত্রুটি: ${errorDetail.substring(0, 100)}. আবার চেষ্টা করুন।` 
-          : `API error: ${errorDetail.substring(0, 100)}. Please try again.`);
-        setAnalyzing(false);
-      } else {
-        const errorMsg = err.message || 'Unknown error';
-        setError(lang === 'bn' 
-          ? `বিশ্লেষণ ব্যর্থ: ${errorMsg}` 
-          : `Analysis failed: ${errorMsg}`);
-        setAnalyzing(false);
+        return;
       }
+      
+      const errKey = Object.keys(errors).find(k => err.message.includes(k));
+      setError(errors[errKey] || (lang === 'bn' ? `বিশ্লেষণ ব্যর্থ: ${err.message}` : `Analysis failed: ${err.message}`));
+      setAnalyzing(false);
     }
   };
   

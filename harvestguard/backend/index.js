@@ -1,6 +1,5 @@
 /**
- * HarvestGuard Backend
- * Simple Express server with lowdb for data persistence
+ * Backend Server - Express.js API Server
  */
 
 const express = require('express');
@@ -20,15 +19,16 @@ async function initDB() {
   
   const dbPath = path.join(__dirname, 'db', 'db.json');
   const adapter = new JSONFile(dbPath);
-  db = new Low(adapter, { users: [], batches: [], badges: [] });
+  db = new Low(adapter, { users: [], batches: [], badges: [], lossEvents: [] });
   
   await db.read();
   
   // Initialize data structure if empty
-  db.data ||= { users: [], batches: [], badges: [] };
+  db.data ||= { users: [], batches: [], badges: [], lossEvents: [] };
   db.data.users ||= [];
   db.data.batches ||= [];
   db.data.badges ||= [];
+  db.data.lossEvents ||= [];
   
   await db.write();
   console.log('Database initialized');

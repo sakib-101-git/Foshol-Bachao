@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { exportApi } from '../utils/api';
+import { exportApi, batches as batchesApi } from '../utils/api';
 import { 
   getUser, 
   getToken, 
@@ -19,6 +19,7 @@ function Profile() {
   const [lang, setLang] = useState(getLanguage());
   const [user, setUser] = useState(getUser());
   const [badges, setBadges] = useState([]);
+  const [lossStats, setLossStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   
@@ -29,17 +30,21 @@ function Profile() {
   }, [navigate]);
   
   useEffect(() => {
-    async function loadBadges() {
+    async function loadData() {
       try {
-        const data = await exportApi.getBadges();
-        setBadges(data.badges || []);
+        const [badgesData, statsData] = await Promise.all([
+          exportApi.getBadges().catch(() => ({ badges: [] })),
+          batchesApi.getLossStats().catch(() => null)
+        ]);
+        setBadges(badgesData.badges || []);
+        setLossStats(statsData);
       } catch (err) {
-        console.error('Failed to load badges:', err);
+        console.error('Failed to load data:', err);
       } finally {
         setLoading(false);
       }
     }
-    loadBadges();
+    loadData();
   }, []);
   
   const toggleLang = () => {
@@ -58,6 +63,26 @@ function Profile() {
   const activeBatches = batches.filter(b => b.status === 'active').length;
   const totalWeight = batches.reduce((sum, b) => sum + (b.estimatedWeightKg || 0), 0);
   const syncedBatches = batches.filter(b => b.synced).length;
+  
+  // Calculate loss stats from local data if API stats unavailable
+  const localLossStats = batches.reduce((acc, b) => {
+    acc.totalHarvested += b.estimatedWeightKg || 0;
+    acc.totalLost += b.totalLossKg || 0;
+    acc.batchesWithLoss += (b.totalLossKg && b.totalLossKg > 0) ? 1 : 0;
+    return acc;
+  }, { totalHarvested: 0, totalLost: 0, batchesWithLoss: 0 });
+  
+  const stats = lossStats || {
+    totalHarvested: localLossStats.totalHarvested,
+    totalLost: localLossStats.totalLost,
+    totalSaved: localLossStats.totalHarvested - localLossStats.totalLost,
+    successRate: localLossStats.totalHarvested > 0 
+      ? ((localLossStats.totalHarvested - localLossStats.totalLost) / localLossStats.totalHarvested * 100).toFixed(1)
+      : 100,
+    lossEventsCount: localLossStats.batchesWithLoss
+  };
+  
+  const successRate = parseFloat(stats.successRate || 100);
   
   return (
     <div style={styles.wrapper}>
@@ -105,6 +130,107 @@ function Profile() {
             <div style={styles.statLabel}>
               {lang === 'bn' ? 'সিঙ্ক' : 'Synced'}
             </div>
+          </div>
+        </div>
+        
+        {/* Loss Tracking & Success Rate */}
+        <div style={styles.sectionCard}>
+          <h3 style={styles.sectionTitle}>
+            {lang === 'bn' ? 'ক্ষতি ট্র্যাকিং এবং সাফল্যের হার' : 'Loss Tracking & Success Rate'}
+          </h3>
+          
+          {/* Success Rate */}
+          <div style={styles.successRateCard}>
+            <div style={styles.successRateHeader}>
+              <span style={styles.successRateIcon}>
+                {successRate >= 90 ? '🎉' : successRate >= 75 ? '✅' : successRate >= 50 ? '⚠️' : '❌'}
+              </span>
+              <div>
+                <div style={styles.successRateValue}>{successRate}%</div>
+                <div style={styles.successRateLabel}>
+                  {lang === 'bn' ? 'সফলতার হার' : 'Success Rate'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div style={styles.progressBar}>
+              <div style={{
+                ...styles.progressFill,
+                width: `${successRate}%`,
+                background: successRate >= 90 ? '#10b981' : successRate >= 75 ? '#3b82f6' : successRate >= 50 ? '#f59e0b' : '#ef4444'
+              }} />
+            </div>
+          </div>
+          
+          {/* Loss Stats */}
+          <div style={styles.lossStatsGrid}>
+            <div style={styles.lossStatItem}>
+              <div style={styles.lossStatIcon}>📦</div>
+              <div style={styles.lossStatContent}>
+                <div style={styles.lossStatValue}>{stats.totalHarvested?.toLocaleString() || 0}</div>
+                <div style={styles.lossStatLabel}>
+                  {lang === 'bn' ? 'মোট সংগ্রহ' : 'Total Harvested'}
+                </div>
+              </div>
+            </div>
+            
+            <div style={styles.lossStatItem}>
+              <div style={{...styles.lossStatIcon, color: '#ef4444'}}>📉</div>
+              <div style={styles.lossStatContent}>
+                <div style={{...styles.lossStatValue, color: '#ef4444'}}>
+                  {stats.totalLost?.toLocaleString() || 0}
+                </div>
+                <div style={styles.lossStatLabel}>
+                  {lang === 'bn' ? 'মোট ক্ষতি' : 'Total Lost'}
+                </div>
+              </div>
+            </div>
+            
+            <div style={styles.lossStatItem}>
+              <div style={{...styles.lossStatIcon, color: '#10b981'}}>💚</div>
+              <div style={styles.lossStatContent}>
+                <div style={{...styles.lossStatValue, color: '#10b981'}}>
+                  {stats.totalSaved?.toLocaleString() || stats.totalHarvested || 0}
+                </div>
+                <div style={styles.lossStatLabel}>
+                  {lang === 'bn' ? 'সংরক্ষিত' : 'Saved'}
+                </div>
+              </div>
+            </div>
+            
+            <div style={styles.lossStatItem}>
+              <div style={styles.lossStatIcon}>📊</div>
+              <div style={styles.lossStatContent}>
+                <div style={styles.lossStatValue}>{stats.lossEventsCount || 0}</div>
+                <div style={styles.lossStatLabel}>
+                  {lang === 'bn' ? 'ক্ষতি ঘটনা' : 'Loss Events'}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Info Message */}
+          <div style={styles.infoMessage}>
+            {successRate >= 90 ? (
+              <p>
+                {lang === 'bn' 
+                  ? '🎉 অসাধারণ! আপনার ফসল রক্ষার হার খুব ভালো।'
+                  : '🎉 Excellent! Your crop preservation rate is very good.'}
+              </p>
+            ) : successRate >= 75 ? (
+              <p>
+                {lang === 'bn' 
+                  ? '✅ ভালো! আরও সতর্কতা দিয়ে ফসল রক্ষা করুন।'
+                  : '✅ Good! Continue protecting crops with more care.'}
+              </p>
+            ) : (
+              <p>
+                {lang === 'bn' 
+                  ? '⚠️ আবহাওয়ার পূর্বাভাস এবং ঝুঁকি বিশ্লেষণ বেশি ব্যবহার করুন।'
+                  : '⚠️ Use weather forecasts and risk analysis more often.'}
+              </p>
+            )}
           </div>
         </div>
         
@@ -309,6 +435,88 @@ const styles = {
     cursor: 'pointer',
     fontFamily: 'inherit',
     marginTop: '8px'
+  },
+  successRateCard: {
+    background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+    borderRadius: '12px',
+    padding: '20px',
+    marginBottom: '20px',
+    border: '2px solid #bbf7d0'
+  },
+  successRateHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    marginBottom: '16px'
+  },
+  successRateIcon: {
+    fontSize: '2.5rem'
+  },
+  successRateValue: {
+    fontSize: '2rem',
+    fontWeight: '700',
+    color: '#166534',
+    lineHeight: '1.2'
+  },
+  successRateLabel: {
+    fontSize: '0.9rem',
+    color: '#6b7280',
+    marginTop: '4px'
+  },
+  progressBar: {
+    width: '100%',
+    height: '12px',
+    background: '#e5e7eb',
+    borderRadius: '6px',
+    overflow: 'hidden'
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: '6px',
+    transition: 'width 0.5s ease'
+  },
+  lossStatsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '12px',
+    marginBottom: '16px'
+  },
+  lossStatItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    background: '#f9fafb',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb'
+  },
+  lossStatIcon: {
+    fontSize: '1.5rem',
+    width: '40px',
+    textAlign: 'center'
+  },
+  lossStatContent: {
+    flex: 1
+  },
+  lossStatValue: {
+    fontSize: '1.2rem',
+    fontWeight: '700',
+    color: '#1f2937',
+    lineHeight: '1.2'
+  },
+  lossStatLabel: {
+    fontSize: '0.85rem',
+    color: '#6b7280',
+    marginTop: '2px'
+  },
+  infoMessage: {
+    padding: '12px',
+    background: '#fffbeb',
+    borderRadius: '8px',
+    border: '1px solid #fcd34d',
+    fontSize: '0.9rem',
+    color: '#92400e',
+    textAlign: 'center'
   }
 };
 

@@ -1,33 +1,72 @@
-import { useState, useEffect } from 'react';
-import { getLanguage, saveLanguage } from '../utils/localSync';
+import { useState, useEffect, useMemo } from 'react';
+import { getLanguage, saveLanguage, getBatches } from '../utils/localSync';
 import Sidebar from '../components/Sidebar';
 import WeatherWidget from '../components/WeatherWidget';
 import LanguageToggle from '../components/LanguageToggle';
 
-// Simplified upazila list
-const UPAZILAS = [
-  { name: 'Sreepur', nameBn: 'শ্রীপুর' },
-  { name: 'Gazipur Sadar', nameBn: 'গাজীপুর সদর' },
-  { name: 'Bogra Sadar', nameBn: 'বগুড়া সদর' },
-  { name: 'Jessore Sadar', nameBn: 'যশোর সদর' },
-  { name: 'Manirampur', nameBn: 'মণিরামপুর' },
-  { name: 'Rajshahi City', nameBn: 'রাজশাহী সিটি' },
-  { name: 'Khulna City', nameBn: 'খুলনা সিটি' },
-  { name: 'Chittagong City', nameBn: 'চট্টগ্রাম সিটি' },
-  { name: 'Sylhet City', nameBn: 'সিলেট সিটি' },
-  { name: 'Mymensingh Sadar', nameBn: 'ময়মনসিংহ সদর' }
+// Main divisions to focus on
+const MAIN_DIVISIONS = [
+  { name: 'Dhaka', nameBn: 'ঢাকা' },
+  { name: 'Chittagong', nameBn: 'চট্টগ্রাম' },
+  { name: 'Sylhet', nameBn: 'সিলেট' }
 ];
+
+// Helper to extract locations from batches - focus on main divisions
+const getLocationsFromBatches = (batches) => {
+  const locationsMap = new Map();
+  
+  // Initialize with main divisions
+  MAIN_DIVISIONS.forEach(div => {
+    locationsMap.set(div.name, {
+      name: div.name,
+      nameBn: div.nameBn,
+      batchCount: 0
+    });
+  });
+  
+  // Count batches per division
+  batches.forEach(batch => {
+    if (batch.status === 'active' && batch.division) {
+      const division = batch.division;
+      if (MAIN_DIVISIONS.some(d => d.name === division)) {
+        const loc = locationsMap.get(division);
+        if (loc) {
+          loc.batchCount++;
+        } else {
+          locationsMap.set(division, {
+            name: division,
+            nameBn: division,
+            batchCount: 1
+          });
+        }
+      }
+    }
+  });
+  
+  // Only return divisions that have batches
+  return Array.from(locationsMap.values())
+    .filter(loc => loc.batchCount > 0)
+    .sort((a, b) => b.batchCount - a.batchCount);
+};
 
 /**
  * Weather page with notifications
  */
 function Weather() {
   const [lang, setLang] = useState(getLanguage());
-  const [selectedUpazila, setSelectedUpazila] = useState('Sreepur');
+  const [batches, setBatches] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  // Get locations from farmer's batches
+  const cropLocations = useMemo(() => getLocationsFromBatches(batches), [batches]);
   
   useEffect(() => {
+    // Load batches
+    setBatches(getBatches());
+    
     // Check notification permission
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
@@ -49,6 +88,13 @@ function Weather() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+  
+  // Set default location when locations are loaded
+  useEffect(() => {
+    if (cropLocations.length > 0 && !selectedLocation) {
+      setSelectedLocation(cropLocations[0].name);
+    }
+  }, [cropLocations, selectedLocation]);
   
   const toggleLang = () => {
     const newLang = lang === 'bn' ? 'en' : 'bn';
@@ -109,23 +155,41 @@ function Weather() {
           {lang === 'bn' ? 'আবহাওয়ার পূর্বাভাস' : 'Weather Forecast'}
         </h1>
         
-        {/* Location Selector */}
-        <div style={styles.card}>
-          <label style={styles.label}>
-            {lang === 'bn' ? 'আপনার এলাকা নির্বাচন করুন' : 'Select your location'}
-          </label>
-          <select
-            style={styles.select}
-            value={selectedUpazila}
-            onChange={(e) => setSelectedUpazila(e.target.value)}
-          >
-            {UPAZILAS.map(up => (
-              <option key={up.name} value={up.name}>
-                {lang === 'bn' ? up.nameBn : up.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {cropLocations.length === 0 ? (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyIcon}>🌾</p>
+            <p style={styles.emptyText}>
+              {lang === 'bn' 
+                ? 'আপনার কোন সক্রিয় ফসল ব্যাচ নেই। আবহাওয়া দেখতে প্রথমে একটি ব্যাচ যোগ করুন।'
+                : 'You have no active crop batches. Add a batch first to see weather forecasts.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Location Selector - From Farmer's Crops */}
+            <div style={styles.card}>
+              <label style={styles.label}>
+                {lang === 'bn' ? 'আপনার ফসলের এলাকা' : 'Your Crop Locations'}
+              </label>
+              <p style={styles.hint}>
+                {lang === 'bn' 
+                  ? `আপনার ${batches.filter(b => b.status === 'active').length}টি সক্রিয় ব্যাচ (${cropLocations.length}টি বিভাগ)`
+                  : `${batches.filter(b => b.status === 'active').length} active batches in ${cropLocations.length} division(s)`}
+              </p>
+              <select
+                style={styles.select}
+                value={selectedLocation || ''}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+              >
+                {cropLocations.map(loc => (
+                  <option key={loc.name} value={loc.name}>
+                    {lang === 'bn' ? loc.nameBn : loc.name} {lang === 'bn' ? `(${loc.batchCount} ব্যাচ)` : `(${loc.batchCount} batches)`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
         
         {/* Notification Settings */}
         <div style={styles.notificationCard}>
@@ -165,7 +229,9 @@ function Weather() {
         </div>
         
         {/* Weather Widget */}
-        <WeatherWidget upazila={selectedUpazila} lang={lang} />
+        {selectedLocation && (
+          <WeatherWidget upazila={selectedLocation} lang={lang} />
+        )}
         </div>
       </div>
     </div>
@@ -305,6 +371,29 @@ const styles = {
     borderRadius: '8px',
     fontSize: '0.85rem',
     color: '#dc2626'
+  },
+  hint: {
+    fontSize: '0.85rem',
+    color: '#6b7280',
+    marginBottom: '12px',
+    fontStyle: 'italic'
+  },
+  emptyState: {
+    textAlign: 'center',
+    padding: '60px 20px',
+    background: '#ffffff',
+    borderRadius: '12px',
+    border: '2px dashed #d1d5db',
+    marginBottom: '20px'
+  },
+  emptyIcon: {
+    fontSize: '3rem',
+    marginBottom: '12px'
+  },
+  emptyText: {
+    color: '#6b7280',
+    fontSize: '1rem',
+    lineHeight: '1.6'
   }
 };
 

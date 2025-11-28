@@ -59,12 +59,23 @@ These losses contribute to food insecurity, economic waste, and environmental im
 
 ## ✨ Key Features
 
+### A1: Comprehensive PDF Export
+- ✅ Multi-page PDF reports with professional design
+- ✅ Full bilingual support (English/Bangla) with proper font rendering
+- ✅ Cover page with farmer information and report date
+- ✅ Batch Report page: Complete batch list with summary statistics (total batches, total weight, active batches)
+- ✅ Risk Analysis page: Risk scores, ETCL (Estimated Time to Critical Loss), and high-risk batch identification
+- ✅ Batch History page: Harvest/loss/saved statistics with success rate calculation
+- ✅ Language selection modal before PDF generation
+- ✅ HTML-to-Canvas-to-PDF approach for proper Bangla Unicode rendering
+- ✅ Export includes all batch details: crop type, weight, location, storage type, harvest date
+- ✅ Automatic filename generation with date stamp
+
 ### A2: Farmer & Crop Management
 - ✅ Secure registration/login (bcrypt + JWT)
 - ✅ Add, edit, and delete paddy batches with weight, date, location, storage
 - ✅ Offline-first with LocalStorage - works without internet
 - ✅ Automatic sync when online
-- ✅ Comprehensive PDF reports (English/Bangla)
 - ✅ Achievement badges
 - ✅ Loss event tracking and success rate calculation
 
@@ -183,39 +194,6 @@ harvestguard/
 │
 └── README.md
 ```
-
----
-
-## 🎯 Demo Script (2 minutes)
-
-1. **Landing Page** (20s)
-   - Show landing page
-   - Toggle language (EN/বাংলা)
-   - Explain the problem
-
-2. **Login** (10s)
-   - Use demo credentials to login
-
-3. **Dashboard** (30s)
-   - View existing batches
-   - Add new batch with form
-   - Show sync status (offline-first)
-   - Download comprehensive PDF report
-
-4. **Risk Prediction** (25s)
-   - Select a batch
-   - Show risk analysis
-   - Explain risk calculation based on weather
-
-5. **Crop Scanner** (25s)
-   - Upload crop photo
-   - Show AI analysis
-   - Display recommendations
-
-6. **Weather & Profile** (20s)
-   - Show weather for locations
-   - View profile with statistics
-   - Show achievement badges
 
 ---
 

@@ -103,34 +103,108 @@ These losses contribute to food insecurity, economic waste, and environmental im
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
-- npm 9+
+- **Node.js 18+** ([Download here](https://nodejs.org/))
+- **npm 9+** (comes with Node.js)
+- **Git** ([Download here](https://git-scm.com/))
 
-### 1. Clone and Install
+### Setup on a New PC/Laptop
+
+#### Step 1: Clone the Repository
 
 ```bash
-# Backend
-cd harvestguard/backend
+# Clone the repository
+git clone https://github.com/sakib-101-git/Foshol-Bachao.git
+
+# Navigate to project directory
+cd Foshol-Bachao/harvestguard
+```
+
+#### Step 2: Install Dependencies
+
+```bash
+# Install backend dependencies
+cd backend
 npm install
 
-# Frontend
+# Install frontend dependencies
 cd ../frontend
 npm install
 ```
 
-### 2. Run the App
+#### Step 3: (Optional) Setup Hugging Face Token for AI Scanner
 
+The Crop Scanner feature uses Hugging Face AI. To enable it:
+
+1. Get a free API token from [Hugging Face](https://huggingface.co/settings/tokens)
+2. Create `.env` file in `backend` folder:
+   ```
+   HF_TOKEN=hf_your_token_here
+   ```
+3. For frontend, create `.env` file in `frontend` folder:
+   ```
+   VITE_HF_TOKEN=hf_your_token_here
+   ```
+
+**Note:** Without the token, the scanner will work in demo mode.
+
+#### Step 4: Run the Application
+
+Open **two terminal windows**:
+
+**Terminal 1 - Backend Server:**
 ```bash
-# Terminal 1 - Backend
 cd backend
 npm start
+```
+Backend will run on: `http://localhost:3001`
 
-# Terminal 2 - Frontend
+**Terminal 2 - Frontend Server:**
+```bash
 cd frontend
 npm run dev
 ```
+Frontend will run on: `http://localhost:5173`
 
-Open http://localhost:5173
+#### Step 5: Access the Application
+
+1. Open your browser
+2. Go to: `http://localhost:5173`
+3. Use demo credentials:
+   - **Email:** `demo@harvestguard.com`
+   - **Password:** `demo123`
+
+---
+
+### Alternative: Using Windows Batch Script
+
+If you're on Windows, you can use the provided batch file:
+
+```bash
+# Double-click or run:
+run-demo.bat
+```
+
+This will automatically start both servers.
+
+---
+
+### Troubleshooting
+
+**Port already in use:**
+- Backend (3001): Change `PORT` in `backend/.env` or stop the process using port 3001
+- Frontend (5173): The Vite dev server will automatically use the next available port
+
+**Cannot connect to backend:**
+- Make sure backend is running on port 3001
+- Check CORS settings in `backend/index.js` if accessing from different origin
+
+**Module not found errors:**
+- Delete `node_modules` folders and re-run `npm install`
+- Make sure you're in the correct directory (`backend` or `frontend`)
+
+**AI Scanner not working:**
+- Check if Hugging Face token is set in `.env` files
+- Scanner will work in demo mode without token, but with limited functionality
 
 ---
 

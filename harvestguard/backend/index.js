@@ -122,6 +122,11 @@ async function startServer() {
     });
   });
   
+  // Favicon handler - prevent 404 errors
+  app.get('/favicon.ico', (req, res) => {
+    res.status(204).end(); // No content
+  });
+  
   // Scanner routes - Direct implementation to avoid router issues
   const axios = require('axios');
   const { authMiddleware } = require('./utils/jwt');

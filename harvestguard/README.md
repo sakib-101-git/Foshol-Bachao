@@ -131,21 +131,31 @@ cd ../frontend
 npm install
 ```
 
-#### Step 3: (Optional) Setup Hugging Face Token for AI Scanner
+#### Step 3: Setup Hugging Face Token for AI Scanner
 
 The Crop Scanner feature uses Hugging Face AI. To enable it:
 
 1. Get a free API token from [Hugging Face](https://huggingface.co/settings/tokens)
+   - Go to: https://huggingface.co/settings/tokens
+   - Click "New token"
+   - Name: "Foshol Bachao Scanner"
+   - Type: "Read"
+   - Copy the token (starts with `hf_...`)
+
 2. Create `.env` file in `backend` folder:
    ```
    HF_TOKEN=hf_your_token_here
    ```
-3. For frontend, create `.env` file in `frontend` folder:
+
+3. Create `.env` file in `frontend` folder:
    ```
    VITE_HF_TOKEN=hf_your_token_here
    ```
 
-**Note:** Without the token, the scanner will work in demo mode.
+**Note:** 
+- Without the token, the scanner will work in demo mode (limited functionality)
+- `.env` files are already in `.gitignore` and won't be committed to GitHub
+- For detailed setup instructions, see [API_TOKEN_SETUP.md](API_TOKEN_SETUP.md)
 
 #### Step 4: Run the Application
 

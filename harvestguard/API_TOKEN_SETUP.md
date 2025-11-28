@@ -19,12 +19,27 @@
      - It looks like: `hf_your_token_here` (example format)
 
 ### 3. Add Token to Project
-   - Open the file: `harvestguard/frontend/.env`
-   - Replace `your_token_here` with your actual token:
+
+   **Backend:**
+   - Create/Open the file: `harvestguard/backend/.env`
+   - Add your token:
+   ```
+   HF_TOKEN=hf_your_actual_token_here
+   ```
+   - Save the file
+
+   **Frontend:**
+   - Create/Open the file: `harvestguard/frontend/.env`
+   - Add your token:
    ```
    VITE_HF_TOKEN=hf_your_actual_token_here
    ```
    - Save the file
+
+   **Example:**
+   If your token is `hf_ABC123...`, your files should look like:
+   - `backend/.env`: `HF_TOKEN=hf_ABC123...`
+   - `frontend/.env`: `VITE_HF_TOKEN=hf_ABC123...`
 
 ### 4. Restart Dev Server
    - Stop the current server (Ctrl+C)

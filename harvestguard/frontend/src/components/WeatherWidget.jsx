@@ -85,7 +85,36 @@ function WeatherWidget({ upazila, lang }) {
   if (!weatherData) {
     return (
       <div className="card">
-        <p>{lang === 'bn' ? 'উপজেলা নির্বাচন করুন' : 'Select an upazila to see weather'}</p>
+        <p style={{ textAlign: 'center', color: '#6b7280' }}>
+          {upazila 
+            ? (lang === 'bn' ? `${upazila} এর আবহাওয়া লোড হচ্ছে...` : `Loading weather for ${upazila}...`)
+            : (lang === 'bn' ? 'বিভাগ নির্বাচন করুন' : 'Please select a division')}
+        </p>
+        {upazila && (
+          <button 
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              weather.get(upazila, lang)
+                .then(data => setWeatherData(data))
+                .catch(err => setError(lang === 'bn' ? 'আবহাওয়া লোড ব্যর্থ' : 'Failed to load weather'))
+                .finally(() => setLoading(false));
+            }}
+            style={{
+              display: 'block',
+              margin: '12px auto 0',
+              padding: '10px 20px',
+              background: '#16a34a',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            {lang === 'bn' ? '🔄 আবার চেষ্টা করুন' : '🔄 Try Again'}
+          </button>
+        )}
       </div>
     );
   }

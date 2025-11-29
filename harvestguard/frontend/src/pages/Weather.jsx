@@ -195,10 +195,8 @@ function Weather() {
           )}
         </div>
         
-        {/* Weather Widget */}
-        {selectedLocation && (
-          <WeatherWidget upazila={selectedLocation} lang={lang} />
-        )}
+        {/* Weather Widget - Always render with selected location */}
+        <WeatherWidget upazila={selectedLocation} lang={lang} />
         </div>
       </div>
     </div>

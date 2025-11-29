@@ -27,70 +27,40 @@ router.post('/identify', async (req, res) => {
     // Get Gemini API key from environment
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('GEMINI_API_KEY not set, using mock response');
-      // Return mock response for testing
-      return res.json({
-        pestName: 'Brown Plant Hopper',
-        pestNameBn: 'বাদামি পাতা হপার',
-        riskLevel: 'High',
-        riskLevelBn: 'উচ্চ',
-        description: 'This pest causes significant damage to rice crops by sucking sap from plants.',
-        descriptionBn: 'এই পোকা ধান গাছ থেকে রস চুষে নিয়ে উল্লেখযোগ্য ক্ষতি করে।',
-        treatmentPlan: {
-          immediate: [
-            'Apply neem oil solution (2ml per liter of water)',
-            'Remove heavily infested plants',
-            'Increase water level in paddy field'
-          ],
-          immediateBn: [
-            'নিম তেল দ্রবণ প্রয়োগ করুন (১ লিটার পানিতে ২ মিলি)',
-            'অতিরিক্ত আক্রান্ত গাছ সরিয়ে ফেলুন',
-            'ধান ক্ষেতে পানির স্তর বাড়ান'
-          ],
-          preventive: [
-            'Use resistant rice varieties',
-            'Maintain proper field hygiene',
-            'Monitor regularly for early detection'
-          ],
-          preventiveBn: [
-            'প্রতিরোধী ধান জাত ব্যবহার করুন',
-            'ক্ষেতের পরিচ্ছন্নতা বজায় রাখুন',
-            'নিয়মিত পর্যবেক্ষণ করুন'
-          ]
-        },
-        source: 'mock'
+      return res.status(400).json({
+        error: 'Gemini API key not configured',
+        errorBn: 'Gemini API কী সেটআপ করা নেই। অনুগ্রহ করে GEMINI_API_KEY এনভায়রনমেন্ট ভেরিয়েবল সেট করুন।'
       });
     }
     
     // Prepare prompt for Gemini with Google Search grounding
-    const prompt = `You are an agricultural expert helping Bangladeshi farmers. Analyze this crop pest/damage image and provide:
+    const prompt = `You are an agricultural expert helping Bangladeshi farmers. Analyze this crop pest/damage image and provide accurate identification and treatment advice.
 
-1. Pest/Damage Name (in English and Bangla)
-2. Risk Level (High/Medium/Low in English and Bangla)
-3. Brief Description (in Bangla)
-4. Treatment Plan in Bangla with:
-   - Immediate actions (3-4 steps)
-   - Preventive measures (3-4 steps)
-   
-Focus on practical, local methods suitable for Bangladesh. Use Google Search to find the most current and accurate information about this pest.
+REQUIREMENTS:
+1. Identify the pest or disease accurately
+2. Provide name in English and Bangla (বাংলা)
+3. Assess risk level (High/Medium/Low)
+4. Give practical treatment plan suitable for Bangladesh
 
 Crop Type: ${cropType || 'Unknown'}
 Location: ${location || 'Bangladesh'}
 
-Respond in JSON format:
+Respond ONLY in valid JSON format (no markdown, no code blocks):
 {
   "pestName": "English name",
   "pestNameBn": "বাংলা নাম",
-  "riskLevel": "High/Medium/Low",
-  "riskLevelBn": "উচ্চ/মাঝারি/কম",
+  "riskLevel": "High",
+  "riskLevelBn": "উচ্চ",
   "description": "Brief description in Bangla",
   "treatmentPlan": {
-    "immediateBn": ["action 1", "action 2", ...],
-    "preventiveBn": ["action 1", "action 2", ...]
+    "immediateBn": ["action 1 in Bangla", "action 2 in Bangla"],
+    "preventiveBn": ["prevention 1 in Bangla", "prevention 2 in Bangla"]
   }
 }`;
 
     // Call Gemini API with image and Google Search grounding
+    const imageData = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    
     const response = await axios.post(
       `${GEMINI_API_URL}?key=${apiKey}`,
       {
@@ -102,14 +72,20 @@ Respond in JSON format:
             {
               inline_data: {
                 mime_type: 'image/jpeg',
-                data: imageBase64.replace(/^data:image\/\w+;base64,/, '')
+                data: imageData
               }
             }
           ]
         }],
         tools: [{
           googleSearchRetrieval: {} // Google Search grounding tool
-        }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024
+        }
       },
       {
         headers: {
@@ -122,36 +98,43 @@ Respond in JSON format:
     // Extract response text
     const responseText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
+    if (!responseText) {
+      throw new Error('No response from Gemini API');
+    }
+    
     // Try to parse JSON from response
     let result;
     try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       responseText.match(/```\s*([\s\S]*?)\s*```/) ||
-                       [null, responseText];
-      result = JSON.parse(jsonMatch[1] || responseText);
+      // Clean the response - remove markdown code blocks if present
+      let cleanedText = responseText.trim();
+      
+      // Remove markdown code blocks
+      cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      
+      // Try to find JSON object
+      const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found in response');
+      }
+      
+      // Validate required fields
+      if (!result.pestName || !result.pestNameBn) {
+        throw new Error('Missing required fields in response');
+      }
+      
     } catch (parseError) {
-      // If JSON parsing fails, create structured response from text
-      console.warn('Failed to parse Gemini JSON response, using text extraction');
-      result = {
-        pestName: 'Unknown Pest',
-        pestNameBn: 'অজানা পোকা',
-        riskLevel: 'Medium',
-        riskLevelBn: 'মাঝারি',
-        description: responseText.substring(0, 200) || 'পোকা শনাক্ত করা হয়েছে।',
-        treatmentPlan: {
-          immediateBn: [
-            'ক্ষেত পরিদর্শন করুন',
-            'স্থানীয় কৃষি কর্মকর্তার সাথে যোগাযোগ করুন',
-            'প্রয়োজনে কীটনাশক ব্যবহার করুন'
-          ],
-          preventiveBn: [
-            'নিয়মিত ক্ষেত পরিদর্শন করুন',
-            'সুস্থ বীজ ব্যবহার করুন',
-            'ক্ষেতের পরিচ্ছন্নতা বজায় রাখুন'
-          ]
-        }
-      };
+      console.error('Failed to parse Gemini JSON response:', parseError);
+      console.error('Response text:', responseText.substring(0, 500));
+      
+      // Return error instead of mock data
+      return res.status(500).json({
+        error: 'Failed to parse AI response',
+        errorBn: 'AI প্রতিক্রিয়া পার্স করতে ব্যর্থ',
+        details: parseError.message,
+        rawResponse: responseText.substring(0, 200)
+      });
     }
     
     res.json({

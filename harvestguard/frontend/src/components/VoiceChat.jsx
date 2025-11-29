@@ -71,15 +71,18 @@ function VoiceChat({ lang = 'bn', onClose }) {
         await processAudio();
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Collect data every 100ms
       setIsRecording(true);
       
-      // Auto-stop after 5 seconds
-      setTimeout(() => {
-        if (isRecording) {
+      // Store timeout ID to clear if needed
+      const timeoutId = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           stopRecording();
         }
       }, 5000);
+      
+      // Store timeout for cleanup
+      mediaRecorderRef.current.timeoutId = timeoutId;
       
     } catch (err) {
       console.error('Microphone access error:', err);
@@ -91,8 +94,15 @@ function VoiceChat({ lang = 'bn', onClose }) {
   };
   
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current) {
+      // Clear timeout if still recording
+      if (mediaRecorderRef.current.timeoutId) {
+        clearTimeout(mediaRecorderRef.current.timeoutId);
+      }
+      
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
     }
   };

@@ -260,7 +260,14 @@ function VoiceChat({ lang = 'bn', onClose }) {
               ...(msg.type === 'user' ? styles.userMessage : styles.botMessage)
             }}
           >
-            <div style={styles.messageContent}>
+            <div style={{
+              ...styles.messageContent,
+              background: msg.type === 'user' 
+                ? 'linear-gradient(135deg, #1a3d1a 0%, #2d5a27 100%)'
+                : '#ffffff',
+              color: msg.type === 'user' ? '#ffffff' : '#1f2937',
+              border: msg.type === 'bot' ? '1px solid #e5e7eb' : 'none'
+            }}>
               {msg.type === 'bot' && <span style={styles.botIcon}>🤖</span>}
               <span style={styles.messageText}>{msg.text}</span>
             </div>
@@ -429,16 +436,12 @@ const styles = {
     gap: '8px',
     padding: '10px 14px',
     borderRadius: '12px',
-    maxWidth: '80%'
-  },
-  userMessageContent: {
-    background: 'linear-gradient(135deg, #1a3d1a 0%, #2d5a27 100%)',
-    color: '#ffffff'
-  },
-  botMessageContent: {
-    background: '#ffffff',
-    color: '#1f2937',
-    border: '1px solid #e5e7eb'
+    maxWidth: '80%',
+    background: (msg) => msg.type === 'user' 
+      ? 'linear-gradient(135deg, #1a3d1a 0%, #2d5a27 100%)'
+      : '#ffffff',
+    color: (msg) => msg.type === 'user' ? '#ffffff' : '#1f2937',
+    border: (msg) => msg.type === 'bot' ? '1px solid #e5e7eb' : 'none'
   },
   botIcon: {
     fontSize: '1.2rem'
@@ -467,11 +470,7 @@ const styles = {
     display: 'flex',
     gap: '4px'
   },
-  typingDots: {
-    display: 'flex',
-    gap: '4px'
-  },
-  'typingDots span': {
+  typingDot: {
     width: '8px',
     height: '8px',
     background: '#1a3d1a',

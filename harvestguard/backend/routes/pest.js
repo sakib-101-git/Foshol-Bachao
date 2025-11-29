@@ -7,9 +7,9 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Gemini API endpoint - Try multiple model options
-// gemini-pro-vision supports images, fallback to gemini-pro
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent';
+// Gemini API endpoint - Use v1 API which is more stable
+// Try gemini-1.5-pro first, then fallback to gemini-pro
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1';
 
 /**
  * Identify pest from uploaded image using Gemini Visual RAG
@@ -122,29 +122,31 @@ Return ONLY valid JSON (no markdown, no code blocks):
     };
     
     console.log('Request payload prepared, calling Gemini API...');
-    console.log('Using API URL:', GEMINI_API_URL);
+    
+    // Try multiple models in order
+    const modelsToTry = [
+      'gemini-1.5-pro',
+      'gemini-pro',
+      'gemini-1.5-flash'
+    ];
     
     let response;
-    try {
-      response = await axios.post(
-        `${GEMINI_API_URL}?key=${apiKey}`,
-        requestPayload,
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        }
-      );
-      console.log('Gemini API response received, status:', response.status);
-    } catch (apiError) {
-      // If gemini-pro-vision fails, try gemini-pro
-      if (apiError.response?.status === 404) {
-        console.log('gemini-pro-vision not found, trying gemini-pro...');
-        const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    let lastError;
+    let modelUsed = null;
+    
+    for (const model of modelsToTry) {
+      try {
+        const apiUrl = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+        console.log(`Trying model: ${model}`);
+        
+        // Remove Google Search grounding if model doesn't support it
+        const payload = model === 'gemini-pro' 
+          ? { ...requestPayload, tools: undefined } // gemini-pro doesn't support tools
+          : requestPayload;
+        
         response = await axios.post(
-          `${fallbackUrl}?key=${apiKey}`,
-          requestPayload,
+          apiUrl,
+          payload,
           {
             headers: {
               'Content-Type': 'application/json'
@@ -152,10 +154,20 @@ Return ONLY valid JSON (no markdown, no code blocks):
             timeout: 30000
           }
         );
-        console.log('Fallback gemini-pro response received, status:', response.status);
-      } else {
-        throw apiError;
+        
+        modelUsed = model;
+        console.log(`✅ Success with model: ${model}, status:`, response.status);
+        break;
+      } catch (apiError) {
+        lastError = apiError;
+        console.log(`❌ Model ${model} failed:`, apiError.response?.status, apiError.response?.data?.error?.message || apiError.message);
+        continue;
       }
+    }
+    
+    if (!response) {
+      console.error('All models failed. Last error:', lastError?.response?.data || lastError?.message);
+      throw new Error(`Gemini API failed: ${lastError?.response?.data?.error?.message || lastError?.message}`);
     }
     
     // Extract response text
@@ -235,6 +247,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
     const finalResult = {
       ...result,
       source: 'gemini-live',
+      model: modelUsed,
       analyzedAt: new Date().toISOString(),
       imageAnalyzed: true,
       apiResponseLength: responseText.length,
@@ -243,6 +256,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
     };
     
     console.log('=== FINAL RESULT ===');
+    console.log('Model Used:', modelUsed);
     console.log('Pest Name:', finalResult.pestName);
     console.log('Risk Level:', finalResult.riskLevel);
     console.log('Source:', finalResult.source);
@@ -267,61 +281,44 @@ router.get('/test', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
     
-    // Simple text test - try gemini-pro first
-    let testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-    let response;
-    let modelUsed = 'gemini-pro';
+    // Try multiple models
+    const modelsToTry = [
+      'gemini-1.5-pro',
+      'gemini-pro',
+      'gemini-1.5-flash'
+    ];
     
-    try {
-      response = await axios.post(
-        `${testUrl}?key=${apiKey}`,
-        {
-          contents: [{
-            parts: [{
-              text: 'Say "API is working" if you can read this.'
-            }]
-          }]
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 10000
-        }
-      );
-    } catch (error) {
-      // Try alternative models
-      const alternatives = [
-        'gemini-1.5-pro',
-        'gemini-1.5-flash',
-        'gemini-pro-vision'
-      ];
-      
-      for (const model of alternatives) {
-        try {
-          testUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-          response = await axios.post(
-            `${testUrl}?key=${apiKey}`,
-            {
-              contents: [{
-                parts: [{
-                  text: 'Say "API is working" if you can read this.'
-                }]
+    let response;
+    let modelUsed = null;
+    let lastError;
+    
+    for (const model of modelsToTry) {
+      try {
+        const apiUrl = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+        response = await axios.post(
+          apiUrl,
+          {
+            contents: [{
+              parts: [{
+                text: 'Say "API is working" if you can read this.'
               }]
-            },
-            {
-              headers: { 'Content-Type': 'application/json' },
-              timeout: 10000
-            }
-          );
-          modelUsed = model;
-          break;
-        } catch (altError) {
-          continue;
-        }
+            }]
+          },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000
+          }
+        );
+        modelUsed = model;
+        break;
+      } catch (error) {
+        lastError = error;
+        continue;
       }
-      
-      if (!response) {
-        throw error;
-      }
+    }
+    
+    if (!response) {
+      throw lastError || new Error('All models failed');
     }
     
     const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';

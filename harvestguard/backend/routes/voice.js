@@ -147,7 +147,7 @@ Audio file will be provided.`
     }
     
     // Process the question
-    const reply = await processQuestion(mockTranscription, req);
+    const reply = await processQuestion(transcription, req);
     
     // Generate audio response (mock - in production use TTS)
     // For now, return text response

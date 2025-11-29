@@ -23,8 +23,62 @@ function VoiceChat({ lang = 'bn', onClose }) {
   const audioChunksRef = useRef([]);
   const chatEndRef = useRef(null);
   const audioRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const streamRef = useRef(null);
   
   const batches = getBatches();
+  
+  // Initialize Web Speech API
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'bn-BD'; // Bangla (Bangladesh)
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Speech recognized:', transcript);
+        // Will be handled in stopRecording
+        recognitionRef.current.lastTranscript = transcript;
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'no-speech') {
+          // User didn't speak, that's okay
+        }
+      };
+      
+      recognition.onend = () => {
+        if (recognitionRef.current && recognitionRef.current.isRecording) {
+          // Process the transcript
+          const transcript = recognitionRef.current.lastTranscript || '';
+          if (transcript) {
+            handleVoiceTranscript(transcript);
+          } else {
+            setError(lang === 'bn' 
+              ? 'কোন কথা শোনা যায়নি। আবার চেষ্টা করুন।'
+              : 'No speech detected. Please try again.');
+          }
+          recognitionRef.current.isRecording = false;
+        }
+      };
+      
+      recognitionRef.current = recognition;
+    }
+    
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [lang]);
   
   useEffect(() => {
     // Add welcome message
@@ -44,6 +98,17 @@ function VoiceChat({ lang = 'bn', onClose }) {
   const startRecording = async () => {
     try {
       setError(null);
+      
+      // Use Web Speech API if available (better for Bangla)
+      if (recognitionRef.current) {
+        recognitionRef.current.isRecording = true;
+        recognitionRef.current.lastTranscript = '';
+        recognitionRef.current.start();
+        setIsRecording(true);
+        return;
+      }
+      
+      // Fallback to MediaRecorder if Web Speech API not available
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           sampleRate: 16000,
@@ -52,6 +117,8 @@ function VoiceChat({ lang = 'bn', onClose }) {
           noiseSuppression: true
         } 
       });
+      
+      streamRef.current = stream;
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
@@ -71,17 +138,16 @@ function VoiceChat({ lang = 'bn', onClose }) {
         await processAudio();
       };
       
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.start(100);
       setIsRecording(true);
       
-      // Store timeout ID to clear if needed
+      // Auto-stop after 5 seconds
       const timeoutId = setTimeout(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           stopRecording();
         }
       }, 5000);
       
-      // Store timeout for cleanup
       mediaRecorderRef.current.timeoutId = timeoutId;
       
     } catch (err) {
@@ -94,8 +160,15 @@ function VoiceChat({ lang = 'bn', onClose }) {
   };
   
   const stopRecording = () => {
+    // Stop Web Speech API if using it
+    if (recognitionRef.current && recognitionRef.current.isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+    
+    // Stop MediaRecorder if using it
     if (mediaRecorderRef.current) {
-      // Clear timeout if still recording
       if (mediaRecorderRef.current.timeoutId) {
         clearTimeout(mediaRecorderRef.current.timeoutId);
       }
@@ -107,11 +180,72 @@ function VoiceChat({ lang = 'bn', onClose }) {
     }
   };
   
+  // Handle voice transcript from Web Speech API
+  const handleVoiceTranscript = async (transcript) => {
+    setIsProcessing(true);
+    
+    // Add user message with transcript
+    const userMessage = {
+      type: 'user',
+      text: transcript,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMessage]);
+    
+    try {
+      // Send transcript to backend for response
+      const response = await fetch(`${API_BASE}/voice/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('harvestguard_token') || 'demo-token-auto-login'}`
+        },
+        body: JSON.stringify({
+          text: transcript,
+          lang: lang,
+          batches: batches
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Chat failed');
+      }
+      
+      const data = await response.json();
+      
+      // Add bot response
+      const botMessage = {
+        type: 'bot',
+        text: data.reply,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMessage]);
+      
+      // Play audio if available
+      if (data.audioUrl) {
+        playAudio(data.audioUrl);
+      }
+      
+    } catch (err) {
+      console.error('Chat error:', err);
+      setError(lang === 'bn' 
+        ? 'চ্যাট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।'
+        : 'Chat failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Fallback: Process audio blob (when Web Speech API not available)
   const processAudio = async () => {
     setIsProcessing(true);
     
     try {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      
+      if (audioBlob.size === 0) {
+        throw new Error('No audio recorded');
+      }
       
       // Add user message (voice)
       const userMessage = {
@@ -122,7 +256,7 @@ function VoiceChat({ lang = 'bn', onClose }) {
       };
       setMessages(prev => [...prev, userMessage]);
       
-      // Send to backend
+      // Send to backend for transcription
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('lang', lang);

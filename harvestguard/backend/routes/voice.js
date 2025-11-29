@@ -189,7 +189,16 @@ router.post('/chat', async (req, res) => {
     }
     
     // Process the question with intelligent Gemini response
-    const reply = await processQuestion(text.trim(), req);
+    // Pass batches in request body for context
+    const requestWithBatches = {
+      ...req,
+      body: {
+        ...req.body,
+        batches: batches || []
+      }
+    };
+    
+    const reply = await processQuestion(text.trim(), requestWithBatches);
     
     res.json({
       reply: reply,

@@ -4,48 +4,42 @@ import Sidebar from '../components/Sidebar';
 import WeatherWidget from '../components/WeatherWidget';
 import LanguageToggle from '../components/LanguageToggle';
 
-// Main divisions to focus on
-const MAIN_DIVISIONS = [
-  { name: 'Dhaka', nameBn: 'ঢাকা' },
-  { name: 'Chittagong', nameBn: 'চট্টগ্রাম' },
-  { name: 'Sylhet', nameBn: 'সিলেট' }
-];
+// All Bangladesh divisions with Bangla names
+const ALL_DIVISIONS = {
+  'Dhaka': 'ঢাকা',
+  'Chittagong': 'চট্টগ্রাম',
+  'Sylhet': 'সিলেট',
+  'Rajshahi': 'রাজশাহী',
+  'Khulna': 'খুলনা',
+  'Barisal': 'বরিশাল',
+  'Rangpur': 'রংপুর',
+  'Mymensingh': 'ময়মনসিংহ'
+};
 
-// Helper to extract locations from batches - focus on main divisions
+// Helper to extract locations from batches - includes ALL divisions with batches
 const getLocationsFromBatches = (batches) => {
   const locationsMap = new Map();
   
-  // Initialize with main divisions
-  MAIN_DIVISIONS.forEach(div => {
-    locationsMap.set(div.name, {
-      name: div.name,
-      nameBn: div.nameBn,
-      batchCount: 0
-    });
-  });
-  
-  // Count batches per division
+  // Count batches per division - include ALL divisions where user has crops
   batches.forEach(batch => {
     if (batch.status === 'active' && batch.division) {
       const division = batch.division;
-      if (MAIN_DIVISIONS.some(d => d.name === division)) {
-        const loc = locationsMap.get(division);
-        if (loc) {
-          loc.batchCount++;
-        } else {
-          locationsMap.set(division, {
-            name: division,
-            nameBn: division,
-            batchCount: 1
-          });
-        }
+      const existing = locationsMap.get(division);
+      
+      if (existing) {
+        existing.batchCount++;
+      } else {
+        locationsMap.set(division, {
+          name: division,
+          nameBn: ALL_DIVISIONS[division] || division,
+          batchCount: 1
+        });
       }
     }
   });
   
-  // Only return divisions that have batches
+  // Return all divisions that have batches, sorted by batch count
   return Array.from(locationsMap.values())
-    .filter(loc => loc.batchCount > 0)
     .sort((a, b) => b.batchCount - a.batchCount);
 };
 

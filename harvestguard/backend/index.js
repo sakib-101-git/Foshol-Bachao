@@ -44,8 +44,25 @@ async function startServer() {
   app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
   }));
+  // CORS configuration - allow frontend origins
+  const allowedOrigins = process.env.FRONTEND_URL 
+    ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  
   app.use(cors({
-    origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: function(origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list or matches vercel/render patterns
+      if (allowedOrigins.includes(origin) || 
+          origin.endsWith('.vercel.app') || 
+          origin.endsWith('.onrender.com')) {
+        return callback(null, true);
+      }
+      
+      callback(null, true); // Allow all for now (hackathon demo)
+    },
     credentials: true
   }));
   app.use(express.json({ limit: '10mb' }));

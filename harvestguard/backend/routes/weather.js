@@ -15,19 +15,41 @@ const locationsPath = path.join(__dirname, '../db/locations.json');
 const locations = JSON.parse(fs.readFileSync(locationsPath, 'utf8'));
 
 /**
- * Find upazila coordinates by name
+ * Find coordinates by name - searches divisions, districts, and upazilas
  */
-function findUpazilaCoords(upazilaName) {
+function findLocationCoords(locationName) {
+  const searchName = locationName.toLowerCase();
+  
+  // First check divisions (e.g., "Rajshahi", "Dhaka")
+  for (const division of locations.divisions) {
+    if (division.name.toLowerCase() === searchName || division.nameBn === locationName) {
+      return { lat: division.lat, lon: division.lon };
+    }
+  }
+  
+  // Then check districts
+  for (const division of locations.divisions) {
+    for (const district of division.districts) {
+      if (district.name.toLowerCase() === searchName || district.nameBn === locationName) {
+        // Use first upazila's coords for district
+        if (district.upazilas && district.upazilas.length > 0) {
+          return { lat: district.upazilas[0].lat, lon: district.upazilas[0].lon };
+        }
+      }
+    }
+  }
+  
+  // Finally check upazilas
   for (const division of locations.divisions) {
     for (const district of division.districts) {
       for (const upazila of district.upazilas) {
-        if (upazila.name.toLowerCase() === upazilaName.toLowerCase() ||
-            upazila.nameBn === upazilaName) {
+        if (upazila.name.toLowerCase() === searchName || upazila.nameBn === locationName) {
           return { lat: upazila.lat, lon: upazila.lon };
         }
       }
     }
   }
+  
   return null;
 }
 
@@ -110,20 +132,37 @@ module.exports = function(db) {
         });
       }
       
-      const coords = findUpazilaCoords(upazila);
+      const coords = findLocationCoords(upazila);
       const apiKey = process.env.OPENWEATHER_API_KEY;
       
       // If we have a valid API key and coordinates, fetch real data
       if (apiKey && apiKey !== 'demo' && coords) {
         try {
-          const weatherUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`;
-          const response = await axios.get(weatherUrl, { timeout: 5000 });
+          // Fetch CURRENT weather (real-time) and FORECAST (5-day) in parallel
+          const currentUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`;
+          const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${apiKey}&units=metric`;
           
-          // Transform OpenWeatherMap response to our format
+          const [currentResponse, forecastResponse] = await Promise.all([
+            axios.get(currentUrl, { timeout: 5000 }),
+            axios.get(forecastUrl, { timeout: 5000 })
+          ]);
+          
+          // Get REAL-TIME current weather
+          const currentData = currentResponse.data;
+          const current = {
+            temp: Math.round(currentData.main.temp),
+            humidity: currentData.main.humidity,
+            feelsLike: Math.round(currentData.main.feels_like),
+            description: currentData.weather[0]?.description || 'Clear',
+            windSpeed: currentData.wind?.speed || 0,
+            rainProbability: 0 // Current weather doesn't have probability
+          };
+          
+          // Transform forecast response to our format
           const forecast = [];
           const dailyData = {};
           
-          response.data.list.forEach(item => {
+          forecastResponse.data.list.forEach(item => {
             const date = item.dt_txt.split(' ')[0];
             if (!dailyData[date]) {
               dailyData[date] = {
@@ -151,12 +190,14 @@ module.exports = function(db) {
             dayCount++;
           }
           
-          const advisories = generateAdvisories(forecast, lang);
+          // Use real-time current for advisories
+          const advisoryData = [{ ...current, rainProbability: forecast[0]?.rainProbability || 0 }, ...forecast.slice(1)];
+          const advisories = generateAdvisories(advisoryData, lang);
           
           return res.json({
             upazila,
             source: 'openweathermap',
-            current: forecast[0] || {},
+            current,
             forecast,
             advisories,
             labels: {

@@ -11,6 +11,9 @@
   "author": "HarvestGuard Team",
   "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",

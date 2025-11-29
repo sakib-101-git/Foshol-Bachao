@@ -11,6 +11,7 @@ import Weather from './pages/Weather';
 import Profile from './pages/Profile';
 import RiskPrediction from './pages/RiskPrediction';
 import CropScanner from './pages/CropScanner';
+import LocalRiskMap from './pages/LocalRiskMap';
 
 function App() {
   return (
@@ -33,6 +34,9 @@ function App() {
         
         {/* A5: Crop Health Scanner */}
         <Route path="/crop-scanner" element={<CropScanner />} />
+        
+        {/* B1: Local Risk Map - Community Awareness */}
+        <Route path="/risk-map" element={<LocalRiskMap />} />
       </Routes>
     </Router>
   );

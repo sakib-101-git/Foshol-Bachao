@@ -26,6 +26,12 @@ const getPages = (lang) => [
     icon: '⚠️'
   },
   {
+    id: 'risk-map',
+    label: lang === 'bn' ? 'ঝুঁকি মানচিত্র' : 'Risk Map',
+    path: '/risk-map',
+    icon: '🗺️'
+  },
+  {
     id: 'scanner',
     label: lang === 'bn' ? 'ফসল স্ক্যানার' : 'Crop Scanner',
     path: '/crop-scanner',

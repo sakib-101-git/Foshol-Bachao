@@ -225,22 +225,27 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
           {/* Map center controller */}
           <MapCenterController center={mapCenter} zoom={mapCenter.zoom} />
           
-          {/* Farmer's own location - Blue pin */}
-          <Marker 
-            position={[farmerLocation.lat, farmerLocation.lon]}
-            icon={userIcon}
-          >
-            <Popup>
-              <div style={styles.popup}>
-                <h4 style={styles.popupTitle}>
-                  {lang === 'bn' ? '📍 আপনার অবস্থান' : '📍 Your Location'}
-                </h4>
-                <p style={styles.popupText}>
-                  {lang === 'bn' ? division : division}
-                </p>
-              </div>
-            </Popup>
-          </Marker>
+          {/* Demo Users - Blue pins (10-15 users) */}
+          {mockUsers.map((user) => (
+            <Marker
+              key={user.id}
+              position={[user.lat, user.lon]}
+              icon={userIcon}
+            >
+              <Popup>
+                <div style={styles.popup}>
+                  <h4 style={styles.popupTitle}>
+                    {lang === 'bn' ? '👤 কৃষক' : '👤 Farmer'}
+                  </h4>
+                  <p style={styles.popupText}>
+                    {lang === 'bn' 
+                      ? `${division} - সক্রিয় কৃষক`
+                      : `${division} - Active Farmer`}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
           
           {/* Neighbor markers - Color coded by risk */}
           {neighbors.map((neighbor) => (

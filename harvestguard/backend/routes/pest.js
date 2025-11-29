@@ -34,27 +34,32 @@ router.post('/identify', async (req, res) => {
     }
     
     // Prepare prompt for Gemini with Google Search grounding
-    const prompt = `You are an agricultural expert helping Bangladeshi farmers. Analyze this crop pest/damage image and provide accurate identification and treatment advice.
+    const prompt = `You are an agricultural expert helping Bangladeshi farmers. Analyze this crop pest/damage image carefully and provide accurate, situation-specific identification and treatment advice.
+
+IMPORTANT: Analyze the ACTUAL image provided. Do NOT use generic responses. Look at the specific pest, disease, or damage visible in the image.
 
 REQUIREMENTS:
-1. Identify the pest or disease accurately
+1. Identify the pest or disease accurately based on what you see in the image
 2. Provide name in English and Bangla (বাংলা)
-3. Assess risk level (High/Medium/Low)
-4. Give practical treatment plan suitable for Bangladesh
+3. Assess risk level (High/Medium/Low) based on the severity visible
+4. Give practical, hyper-local treatment plan suitable for Bangladesh
+5. Focus on local methods and available resources in Bangladesh
 
 Crop Type: ${cropType || 'Unknown'}
 Location: ${location || 'Bangladesh'}
 
-Respond ONLY in valid JSON format (no markdown, no code blocks):
+Use Google Search to find the most current and accurate information about this specific pest/disease.
+
+Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations outside JSON):
 {
-  "pestName": "English name",
+  "pestName": "English name based on image",
   "pestNameBn": "বাংলা নাম",
-  "riskLevel": "High",
-  "riskLevelBn": "উচ্চ",
-  "description": "Brief description in Bangla",
+  "riskLevel": "High/Medium/Low based on image severity",
+  "riskLevelBn": "উচ্চ/মাঝারি/কম",
+  "description": "Brief description in Bangla about what you see in the image",
   "treatmentPlan": {
-    "immediateBn": ["action 1 in Bangla", "action 2 in Bangla"],
-    "preventiveBn": ["prevention 1 in Bangla", "prevention 2 in Bangla"]
+    "immediateBn": ["practical action 1 in Bangla", "practical action 2 in Bangla", "practical action 3 in Bangla"],
+    "preventiveBn": ["prevention 1 in Bangla", "prevention 2 in Bangla", "prevention 3 in Bangla"]
   }
 }`;
 
@@ -78,13 +83,18 @@ Respond ONLY in valid JSON format (no markdown, no code blocks):
           ]
         }],
         tools: [{
-          googleSearchRetrieval: {} // Google Search grounding tool
+          googleSearchRetrieval: {
+            dynamicRetrievalConfig: {
+              mode: "MODE_DYNAMIC",
+              dynamicThreshold: 0.3
+            }
+          } // Google Search grounding tool - MANDATORY
         }],
         generationConfig: {
-          temperature: 0.7,
+          temperature: 0.4, // Lower temperature for more accurate identification
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 1024
+          maxOutputTokens: 2048
         }
       },
       {

@@ -81,12 +81,12 @@ function VoiceChat({ lang = 'bn', onClose }) {
   }, [lang]);
   
   useEffect(() => {
-    // Add welcome message
+    // Add welcome message with Assalamualaikum
     setMessages([{
       type: 'bot',
       text: lang === 'bn' 
-        ? '👋 নমস্কার! আমি আপনার সহায়ক। আপনি কথা বলতে পারেন বা টাইপ করতে পারেন।'
-        : '👋 Hello! I am your assistant. You can speak or type.',
+        ? '🕌 আসসালামু আলাইকুম! আমি আপনার সহায়ক। আপনি কথা বলতে পারেন বা টাইপ করতে পারেন।'
+        : '🕌 Assalamualaikum! I am your assistant. You can speak or type.',
       timestamp: new Date()
     }]);
   }, [lang]);

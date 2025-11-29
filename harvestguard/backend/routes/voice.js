@@ -188,8 +188,8 @@ router.post('/chat', async (req, res) => {
       });
     }
     
-    // Process the question
-    const reply = await processQuestion(text, { body: { batches } });
+    // Process the question with intelligent Gemini response
+    const reply = await processQuestion(text.trim(), req);
     
     res.json({
       reply: reply,
@@ -222,31 +222,54 @@ async function processQuestion(text, req) {
     }
   }
   
-  // Try Gemini API if available for advanced responses
+  // Use Gemini API for intelligent responses (MANDATORY)
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     try {
+      // Get user's batch context for intelligent responses
+      const batches = req.body.batches || [];
+      const batchContext = batches.length > 0 
+        ? `User has ${batches.length} crop batch(es): ${batches.map(b => `${b.cropType} (${b.estimatedWeightKg}kg)`).join(', ')}`
+        : 'User has no active batches';
+      
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
         {
           contents: [{
             parts: [{
-              text: `You are an agricultural assistant for Bangladeshi farmers. Answer this question in Bangla (Bengali) in a helpful, practical way. Keep response under 100 words.
+              text: `You are an intelligent agricultural assistant for Bangladeshi farmers. Answer the farmer's question in Bangla (Bengali) with practical, helpful advice.
 
-Question: ${text}
+Farmer's Question: ${text}
 
-Context: User has crop batches. Provide practical advice.`
+Context: ${batchContext}
+Location: Bangladesh
+
+Requirements:
+- Answer entirely in Bangla
+- Be practical and specific
+- Consider the farmer's crop context
+- Provide actionable advice
+- Keep response concise (under 150 words)
+- Use local methods suitable for Bangladesh`
             }]
+          }],
+          tools: [{
+            googleSearchRetrieval: {
+              dynamicRetrievalConfig: {
+                mode: "MODE_DYNAMIC",
+                dynamicThreshold: 0.3
+              }
+            }
           }]
         },
         {
           headers: { 'Content-Type': 'application/json' },
-          timeout: 10000
+          timeout: 15000
         }
       );
       
       const reply = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (reply) {
+      if (reply && reply.trim()) {
         return reply.trim();
       }
     } catch (err) {

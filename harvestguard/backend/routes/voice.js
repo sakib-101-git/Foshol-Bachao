@@ -157,7 +157,7 @@ Audio file will be provided.`
     fs.unlinkSync(req.file.path);
     
     res.json({
-      transcription: mockTranscription,
+      transcription: transcription,
       reply: reply,
       audioUrl: null // In production, return TTS audio URL
     });

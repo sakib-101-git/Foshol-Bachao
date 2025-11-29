@@ -35,14 +35,27 @@ function VoiceChat({ lang = 'bn', onClose }) {
       const recognition = new SpeechRecognition();
       
       recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.interimResults = true; // Show interim results for better UX
       recognition.lang = 'bn-BD'; // Bangla (Bangladesh)
+      recognition.maxAlternatives = 1; // Only get the best match
       
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        console.log('Speech recognized:', transcript);
-        // Will be handled in stopRecording
-        recognitionRef.current.lastTranscript = transcript;
+        // Get the final transcript
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+          console.log('Speech recognized (final):', finalTranscript);
+          recognitionRef.current.lastTranscript = finalTranscript;
+        } else if (event.results.length > 0) {
+          // Use interim result if no final result yet
+          const interim = event.results[event.results.length - 1][0].transcript;
+          console.log('Speech recognized (interim):', interim);
+          recognitionRef.current.lastTranscript = interim;
+        }
       };
       
       recognition.onerror = (event) => {
@@ -53,17 +66,32 @@ function VoiceChat({ lang = 'bn', onClose }) {
       };
       
       recognition.onend = () => {
+        console.log('Recognition ended. isRecording:', recognitionRef.current?.isRecording);
         if (recognitionRef.current && recognitionRef.current.isRecording) {
           // Process the transcript
           const transcript = recognitionRef.current.lastTranscript || '';
-          if (transcript) {
-            handleVoiceTranscript(transcript);
+          console.log('Recognition ended. Final transcript:', transcript);
+          recognitionRef.current.isRecording = false;
+          setIsRecording(false);
+          
+          if (transcript && transcript.trim()) {
+            handleVoiceTranscript(transcript.trim());
           } else {
             setError(lang === 'bn' 
               ? 'কোন কথা শোনা যায়নি। আবার চেষ্টা করুন।'
               : 'No speech detected. Please try again.');
           }
+        }
+      };
+      
+      recognition.onnomatch = () => {
+        console.log('No speech match found');
+        if (recognitionRef.current && recognitionRef.current.isRecording) {
+          setError(lang === 'bn' 
+            ? 'কথা বুঝতে পারিনি। আবার চেষ্টা করুন।'
+            : 'Could not understand speech. Please try again.');
           recognitionRef.current.isRecording = false;
+          setIsRecording(false);
         }
       };
       
@@ -164,6 +192,7 @@ function VoiceChat({ lang = 'bn', onClose }) {
     if (recognitionRef.current && recognitionRef.current.isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
+      // Transcript will be processed in onend event
       return;
     }
     

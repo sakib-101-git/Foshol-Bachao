@@ -359,3 +359,4 @@ const styles = {
 export default SmartAlertSystem;
 export { generateSmartAlert, simulateSMS };
 
+

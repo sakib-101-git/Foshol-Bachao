@@ -7,8 +7,8 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Gemini API endpoint - Use v1beta with correct model names
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Gemini API endpoint - Use v1 API which is more stable
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1';
 
 /**
  * Identify pest from uploaded image using Gemini Visual RAG
@@ -122,10 +122,12 @@ Return ONLY valid JSON (no markdown, no code blocks):
     
     console.log('Request payload prepared, calling Gemini API...');
     
-    // Try multiple models in order - use the simplest one that works
+    // Try multiple models in order - prioritize image-capable models
+    // gemini-1.5-pro supports images, gemini-pro does not
     const modelsToTry = [
-      'gemini-pro',  // Most basic, should always work
-      'models/gemini-pro'  // Alternative format
+      'gemini-1.5-pro',      // Best for image analysis
+      'gemini-1.5-flash',    // Faster alternative
+      'gemini-pro'           // Fallback (no image support, will fail)
     ];
     
     let response;
@@ -134,19 +136,24 @@ Return ONLY valid JSON (no markdown, no code blocks):
     
     for (const model of modelsToTry) {
       try {
-        // Use direct URL format that works
-        const apiUrl = model.startsWith('models/') 
-          ? `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`
-          : `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+        const apiUrl = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
         
-        console.log(`Trying model: ${model} at ${apiUrl.substring(0, 80)}...`);
+        console.log(`Trying model: ${model}...`);
         
-        // For gemini-pro, remove tools (not supported)
-        const payload = {
-          contents: requestPayload.contents,
-          generationConfig: requestPayload.generationConfig
-          // Remove tools for compatibility
-        };
+        // For gemini-pro, remove tools and image (not supported)
+        let payload;
+        if (model === 'gemini-pro') {
+          // gemini-pro doesn't support images or tools
+          payload = {
+            contents: [{
+              parts: [{ text: prompt }]
+            }],
+            generationConfig: requestPayload.generationConfig
+          };
+        } else {
+          // gemini-1.5-pro and gemini-1.5-flash support images
+          payload = requestPayload;
+        }
         
         response = await axios.post(
           apiUrl,
@@ -165,8 +172,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
       } catch (apiError) {
         lastError = apiError;
         const errorMsg = apiError.response?.data?.error?.message || apiError.message;
+        const errorCode = apiError.response?.data?.error?.code;
         console.log(`❌ Model ${model} failed:`, apiError.response?.status, errorMsg);
-        if (apiError.response?.status === 404) {
+        if (apiError.response?.status === 404 || errorCode === 404) {
           console.log('   → This model does not exist, trying next...');
         }
         continue;
@@ -295,11 +303,11 @@ router.get('/test', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
     
-    // Try multiple models
+    // Try multiple models - use v1 API
     const modelsToTry = [
       'gemini-1.5-pro',
-      'gemini-pro',
-      'gemini-1.5-flash'
+      'gemini-1.5-flash',
+      'gemini-pro'
     ];
     
     let response;
@@ -308,7 +316,7 @@ router.get('/test', async (req, res) => {
     
     for (const model of modelsToTry) {
       try {
-        const apiUrl = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
         response = await axios.post(
           apiUrl,
           {

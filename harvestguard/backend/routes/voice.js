@@ -112,9 +112,10 @@ router.post('/process', upload.single('audio'), async (req, res) => {
         const audioBuffer = fs.readFileSync(req.file.path);
         const audioBase64 = audioBuffer.toString('base64');
         
-        // Use Gemini for transcription
+        // Use Gemini for transcription (if Web Speech API fails on frontend)
+        // Note: Frontend should use Web Speech API directly for better Bangla support
         const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${geminiKey}`,
           {
             contents: [{
               parts: [{
@@ -247,7 +248,7 @@ async function processQuestion(text, req) {
         : 'User has no active batches';
       
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${geminiKey}`,
         {
           contents: [{
             parts: [{

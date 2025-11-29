@@ -40,28 +40,32 @@ router.post('/identify', async (req, res) => {
       });
     }
     
+    // Generate unique request ID to prevent caching
+    const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    
     // Prepare prompt for Gemini with Google Search grounding
-    const prompt = `Analyze this agricultural image. Describe EXACTLY what you see in the image.
+    const prompt = `[Request ID: ${requestId}] Analyze this agricultural image RIGHT NOW. Look at the ACTUAL image and describe what you SEE.
 
-STEP 1: Describe the image:
-- Is the leaf/plant FRESH and GREEN? → Answer: "Healthy/Fresh"
-- Does it have YELLOW/BROWN spots or discoloration? → Identify the disease
-- Is it DEAD or BROWN? → Identify the cause
-- Are there INSECTS or PESTS visible? → Identify the pest
-- What is the CONDITION? (Healthy/Diseased/Damaged/Pest-infested)
+CRITICAL: This is a NEW image. Analyze it from scratch. Do NOT use previous responses.
 
-STEP 2: Based on your observation, provide:
+What do you SEE in this image?
+1. Color: Is it GREEN (healthy), YELLOW (disease), BROWN (dead), or has SPOTS?
+2. Condition: Is it FRESH, DISEASED, DAMAGED, or PEST-INFESTED?
+3. Details: Describe specific symptoms, pests, or damage visible
+
+Based on what you ACTUALLY see in this image, provide:
 
 Crop: ${cropType || 'Unknown'}
 Location: ${location || 'Bangladesh'}
+Request Time: ${new Date().toISOString()}
 
-Return ONLY this JSON (no other text):
+Return ONLY valid JSON (no markdown, no code blocks):
 {
-  "pestName": "Exact name from image",
+  "pestName": "Specific identification based on image",
   "pestNameBn": "বাংলা নাম",
   "riskLevel": "Low/Medium/High",
   "riskLevelBn": "কম/মাঝারি/উচ্চ",
-  "description": "What you see in Bangla",
+  "description": "What you actually see in the image (in Bangla)",
   "treatmentPlan": {
     "immediateBn": ["action 1", "action 2", "action 3"],
     "preventiveBn": ["prevention 1", "prevention 2", "prevention 3"]
@@ -109,9 +113,9 @@ Return ONLY this JSON (no other text):
         }
       }],
       generationConfig: {
-        temperature: 0.1, // Very low for consistent results
-        topK: 20,
-        topP: 0.8,
+        temperature: 0.7, // Higher temperature for more varied responses
+        topK: 40,
+        topP: 0.95,
         maxOutputTokens: 2048
       }
     };

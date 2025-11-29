@@ -34,37 +34,58 @@ router.post('/identify', async (req, res) => {
     }
     
     // Prepare prompt for Gemini with Google Search grounding
-    const prompt = `You are an agricultural expert helping Bangladeshi farmers. Analyze this crop pest/damage image carefully and provide accurate, situation-specific identification and treatment advice.
+    const prompt = `You are an agricultural expert helping Bangladeshi farmers. You MUST analyze the ACTUAL image provided and give SPECIFIC results based on what you see.
 
-IMPORTANT: Analyze the ACTUAL image provided. Do NOT use generic responses. Look at the specific pest, disease, or damage visible in the image.
+CRITICAL INSTRUCTIONS:
+- Look at the image carefully - is it a fresh healthy leaf, a diseased leaf, a dead/damaged leaf, or showing pests?
+- If the leaf is FRESH and HEALTHY: Identify it as healthy, risk level LOW
+- If the leaf shows DISEASE (spots, discoloration, lesions): Identify the specific disease visible
+- If the leaf is DEAD/DAMAGED: Identify the cause (pest, disease, environmental)
+- If PESTS are visible: Identify the specific pest species
+- DO NOT give generic responses - analyze what is ACTUALLY in the image
 
 REQUIREMENTS:
-1. Identify the pest or disease accurately based on what you see in the image
-2. Provide name in English and Bangla (বাংলা)
-3. Assess risk level (High/Medium/Low) based on the severity visible
-4. Give practical, hyper-local treatment plan suitable for Bangladesh
-5. Focus on local methods and available resources in Bangladesh
+1. Examine the image carefully and describe what you ACTUALLY see
+2. Identify the pest/disease/condition based on visible symptoms
+3. Provide name in English and Bangla (বাংলা)
+4. Assess risk level (High/Medium/Low) based on actual severity in image
+5. Give practical, hyper-local treatment plan suitable for Bangladesh
+6. Focus on local methods and available resources in Bangladesh
 
 Crop Type: ${cropType || 'Unknown'}
 Location: ${location || 'Bangladesh'}
 
-Use Google Search to find the most current and accurate information about this specific pest/disease.
+Use Google Search grounding to find current, accurate information about what you identify in the image.
 
-Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations outside JSON):
+Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations):
 {
-  "pestName": "English name based on image",
+  "pestName": "Specific name based on what you see in image",
   "pestNameBn": "বাংলা নাম",
-  "riskLevel": "High/Medium/Low based on image severity",
+  "riskLevel": "High/Medium/Low based on actual image",
   "riskLevelBn": "উচ্চ/মাঝারি/কম",
-  "description": "Brief description in Bangla about what you see in the image",
+  "description": "What you actually see in the image - describe in Bangla",
   "treatmentPlan": {
-    "immediateBn": ["practical action 1 in Bangla", "practical action 2 in Bangla", "practical action 3 in Bangla"],
+    "immediateBn": ["action 1 in Bangla", "action 2 in Bangla", "action 3 in Bangla"],
     "preventiveBn": ["prevention 1 in Bangla", "prevention 2 in Bangla", "prevention 3 in Bangla"]
   }
 }`;
 
     // Call Gemini API with image and Google Search grounding
-    const imageData = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    // Remove data URL prefix if present
+    let imageData = imageBase64;
+    if (imageData.startsWith('data:')) {
+      imageData = imageData.split(',')[1];
+    }
+    
+    // Detect image MIME type
+    let mimeType = 'image/jpeg';
+    if (imageBase64.startsWith('data:image/png')) {
+      mimeType = 'image/png';
+    } else if (imageBase64.startsWith('data:image/jpeg') || imageBase64.startsWith('data:image/jpg')) {
+      mimeType = 'image/jpeg';
+    }
+    
+    console.log('Sending image to Gemini API, size:', imageData.length, 'bytes, type:', mimeType);
     
     const response = await axios.post(
       `${GEMINI_API_URL}?key=${apiKey}`,
@@ -76,7 +97,7 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations 
             },
             {
               inline_data: {
-                mime_type: 'image/jpeg',
+                mime_type: mimeType,
                 data: imageData
               }
             }
@@ -91,9 +112,9 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations 
           } // Google Search grounding tool - MANDATORY
         }],
         generationConfig: {
-          temperature: 0.4, // Lower temperature for more accurate identification
-          topK: 40,
-          topP: 0.95,
+          temperature: 0.2, // Very low temperature for accurate, consistent analysis
+          topK: 20,
+          topP: 0.9,
           maxOutputTokens: 2048
         }
       },
@@ -109,8 +130,12 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations 
     const responseText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
     if (!responseText) {
+      console.error('Empty response from Gemini API');
       throw new Error('No response from Gemini API');
     }
+    
+    console.log('Gemini API response received, length:', responseText.length);
+    console.log('First 200 chars:', responseText.substring(0, 200));
     
     // Try to parse JSON from response
     let result;
@@ -119,14 +144,21 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations 
       let cleanedText = responseText.trim();
       
       // Remove markdown code blocks
-      cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      cleanedText = cleanedText.replace(/```json\s*/g, '').replace(/```\s*/g, '').replace(/```/g, '');
       
-      // Try to find JSON object
+      // Try to find JSON object (more flexible matching)
       const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         result = JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error('No JSON found in response');
+        // Try to extract JSON from text that might have explanations
+        const jsonStart = cleanedText.indexOf('{');
+        const jsonEnd = cleanedText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          result = JSON.parse(cleanedText.substring(jsonStart, jsonEnd + 1));
+        } else {
+          throw new Error('No JSON found in response');
+        }
       }
       
       // Validate required fields
@@ -134,23 +166,41 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations 
         throw new Error('Missing required fields in response');
       }
       
+      // Ensure all required fields exist
+      if (!result.riskLevel) result.riskLevel = 'Medium';
+      if (!result.riskLevelBn) result.riskLevelBn = 'মাঝারি';
+      if (!result.description) result.description = 'ছবি বিশ্লেষণ করা হয়েছে।';
+      if (!result.treatmentPlan) {
+        result.treatmentPlan = {
+          immediateBn: ['ক্ষেত পরিদর্শন করুন', 'স্থানীয় কৃষি কর্মকর্তার সাথে যোগাযোগ করুন'],
+          preventiveBn: ['নিয়মিত ক্ষেত পরিদর্শন করুন', 'সুস্থ বীজ ব্যবহার করুন']
+        };
+      }
+      
+      console.log('Successfully parsed result:', {
+        pestName: result.pestName,
+        riskLevel: result.riskLevel
+      });
+      
     } catch (parseError) {
       console.error('Failed to parse Gemini JSON response:', parseError);
-      console.error('Response text:', responseText.substring(0, 500));
+      console.error('Full response text:', responseText);
       
       // Return error instead of mock data
       return res.status(500).json({
         error: 'Failed to parse AI response',
         errorBn: 'AI প্রতিক্রিয়া পার্স করতে ব্যর্থ',
         details: parseError.message,
-        rawResponse: responseText.substring(0, 200)
+        rawResponse: responseText.substring(0, 500),
+        hint: 'Check backend logs for full response'
       });
     }
     
+    // Return result with source indicator
     res.json({
       ...result,
-      source: 'gemini',
-      rawResponse: responseText.substring(0, 500) // Include first 500 chars for debugging
+      source: 'gemini-live',
+      analyzedAt: new Date().toISOString()
     });
     
   } catch (error) {

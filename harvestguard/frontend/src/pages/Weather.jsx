@@ -5,42 +5,32 @@ import WeatherWidget from '../components/WeatherWidget';
 import LanguageToggle from '../components/LanguageToggle';
 
 // All Bangladesh divisions with Bangla names
-const ALL_DIVISIONS = {
-  'Dhaka': 'ঢাকা',
-  'Chittagong': 'চট্টগ্রাম',
-  'Sylhet': 'সিলেট',
-  'Rajshahi': 'রাজশাহী',
-  'Khulna': 'খুলনা',
-  'Barisal': 'বরিশাল',
-  'Rangpur': 'রংপুর',
-  'Mymensingh': 'ময়মনসিংহ'
-};
+const ALL_DIVISIONS = [
+  { name: 'Dhaka', nameBn: 'ঢাকা' },
+  { name: 'Chittagong', nameBn: 'চট্টগ্রাম' },
+  { name: 'Rajshahi', nameBn: 'রাজশাহী' },
+  { name: 'Khulna', nameBn: 'খুলনা' },
+  { name: 'Sylhet', nameBn: 'সিলেট' },
+  { name: 'Barisal', nameBn: 'বরিশাল' },
+  { name: 'Rangpur', nameBn: 'রংপুর' },
+  { name: 'Mymensingh', nameBn: 'ময়মনসিংহ' }
+];
 
-// Helper to extract locations from batches - includes ALL divisions with batches
-const getLocationsFromBatches = (batches) => {
-  const locationsMap = new Map();
-  
-  // Count batches per division - include ALL divisions where user has crops
+// Helper to get all divisions with batch counts
+const getDivisionsWithBatchCounts = (batches) => {
+  // Count batches per division
+  const batchCounts = {};
   batches.forEach(batch => {
     if (batch.status === 'active' && batch.division) {
-      const division = batch.division;
-      const existing = locationsMap.get(division);
-      
-      if (existing) {
-        existing.batchCount++;
-      } else {
-        locationsMap.set(division, {
-          name: division,
-          nameBn: ALL_DIVISIONS[division] || division,
-          batchCount: 1
-        });
-      }
+      batchCounts[batch.division] = (batchCounts[batch.division] || 0) + 1;
     }
   });
   
-  // Return all divisions that have batches, sorted by batch count
-  return Array.from(locationsMap.values())
-    .sort((a, b) => b.batchCount - a.batchCount);
+  // Return all divisions with their batch counts
+  return ALL_DIVISIONS.map(div => ({
+    ...div,
+    batchCount: batchCounts[div.name] || 0
+  }));
 };
 
 /**
@@ -49,13 +39,13 @@ const getLocationsFromBatches = (batches) => {
 function Weather() {
   const [lang, setLang] = useState(getLanguage());
   const [batches, setBatches] = useState([]);
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState('Dhaka'); // Default to Dhaka
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
-  // Get locations from farmer's batches
-  const cropLocations = useMemo(() => getLocationsFromBatches(batches), [batches]);
+  // Get all divisions with batch counts
+  const allDivisions = useMemo(() => getDivisionsWithBatchCounts(batches), [batches]);
   
   useEffect(() => {
     // Load batches
@@ -82,13 +72,6 @@ function Weather() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-  
-  // Set default location when locations are loaded
-  useEffect(() => {
-    if (cropLocations.length > 0 && !selectedLocation) {
-      setSelectedLocation(cropLocations[0].name);
-    }
-  }, [cropLocations, selectedLocation]);
   
   const toggleLang = () => {
     const newLang = lang === 'bn' ? 'en' : 'bn';
@@ -149,41 +132,31 @@ function Weather() {
           {lang === 'bn' ? 'আবহাওয়ার পূর্বাভাস' : 'Weather Forecast'}
         </h1>
         
-        {cropLocations.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyIcon}>🌾</p>
-            <p style={styles.emptyText}>
+        {/* Location Selector - All Divisions */}
+        <div style={styles.card}>
+          <label style={styles.label}>
+            {lang === 'bn' ? '📍 বিভাগ নির্বাচন করুন' : '📍 Select Division'}
+          </label>
+          {batches.filter(b => b.status === 'active').length > 0 && (
+            <p style={styles.hint}>
               {lang === 'bn' 
-                ? 'আপনার কোন সক্রিয় ফসল ব্যাচ নেই। আবহাওয়া দেখতে প্রথমে একটি ব্যাচ যোগ করুন।'
-                : 'You have no active crop batches. Add a batch first to see weather forecasts.'}
+                ? `আপনার ${batches.filter(b => b.status === 'active').length}টি সক্রিয় ব্যাচ আছে`
+                : `You have ${batches.filter(b => b.status === 'active').length} active batch(es)`}
             </p>
-          </div>
-        ) : (
-          <>
-            {/* Location Selector - From Farmer's Crops */}
-            <div style={styles.card}>
-              <label style={styles.label}>
-                {lang === 'bn' ? 'আপনার ফসলের এলাকা' : 'Your Crop Locations'}
-              </label>
-              <p style={styles.hint}>
-                {lang === 'bn' 
-                  ? `আপনার ${batches.filter(b => b.status === 'active').length}টি সক্রিয় ব্যাচ (${cropLocations.length}টি বিভাগ)`
-                  : `${batches.filter(b => b.status === 'active').length} active batches in ${cropLocations.length} division(s)`}
-              </p>
-              <select
-                style={styles.select}
-                value={selectedLocation || ''}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-              >
-                {cropLocations.map(loc => (
-                  <option key={loc.name} value={loc.name}>
-                    {lang === 'bn' ? loc.nameBn : loc.name} {lang === 'bn' ? `(${loc.batchCount} ব্যাচ)` : `(${loc.batchCount} batches)`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
+          )}
+          <select
+            style={styles.select}
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+          >
+            {allDivisions.map(div => (
+              <option key={div.name} value={div.name}>
+                {lang === 'bn' ? div.nameBn : div.name}
+                {div.batchCount > 0 && (lang === 'bn' ? ` (${div.batchCount} ব্যাচ)` : ` (${div.batchCount} batches)`)}
+              </option>
+            ))}
+          </select>
+        </div>
         
         {/* Notification Settings */}
         <div style={styles.notificationCard}>

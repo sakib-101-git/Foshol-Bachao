@@ -25,8 +25,15 @@ router.post('/identify', async (req, res) => {
     }
     
     // Get Gemini API key from environment
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
+    
+    console.log('=== PEST IDENTIFICATION REQUEST ===');
+    console.log('API Key present:', !!apiKey);
+    console.log('Image data length:', imageBase64 ? imageBase64.length : 0);
+    console.log('Crop type:', cropType);
+    console.log('Location:', location);
+    
+    if (!apiKey || apiKey === 'your_gemini_key_here') {
       return res.status(400).json({
         error: 'Gemini API key not configured',
         errorBn: 'Gemini API কী সেটআপ করা নেই। অনুগ্রহ করে GEMINI_API_KEY এনভায়রনমেন্ট ভেরিয়েবল সেট করুন।'
@@ -34,39 +41,30 @@ router.post('/identify', async (req, res) => {
     }
     
     // Prepare prompt for Gemini with Google Search grounding
-    const prompt = `You are an agricultural expert helping Bangladeshi farmers. You MUST analyze the ACTUAL image provided and give SPECIFIC results based on what you see.
+    const prompt = `Analyze this agricultural image. Describe EXACTLY what you see in the image.
 
-CRITICAL INSTRUCTIONS:
-- Look at the image carefully - is it a fresh healthy leaf, a diseased leaf, a dead/damaged leaf, or showing pests?
-- If the leaf is FRESH and HEALTHY: Identify it as healthy, risk level LOW
-- If the leaf shows DISEASE (spots, discoloration, lesions): Identify the specific disease visible
-- If the leaf is DEAD/DAMAGED: Identify the cause (pest, disease, environmental)
-- If PESTS are visible: Identify the specific pest species
-- DO NOT give generic responses - analyze what is ACTUALLY in the image
+STEP 1: Describe the image:
+- Is the leaf/plant FRESH and GREEN? → Answer: "Healthy/Fresh"
+- Does it have YELLOW/BROWN spots or discoloration? → Identify the disease
+- Is it DEAD or BROWN? → Identify the cause
+- Are there INSECTS or PESTS visible? → Identify the pest
+- What is the CONDITION? (Healthy/Diseased/Damaged/Pest-infested)
 
-REQUIREMENTS:
-1. Examine the image carefully and describe what you ACTUALLY see
-2. Identify the pest/disease/condition based on visible symptoms
-3. Provide name in English and Bangla (বাংলা)
-4. Assess risk level (High/Medium/Low) based on actual severity in image
-5. Give practical, hyper-local treatment plan suitable for Bangladesh
-6. Focus on local methods and available resources in Bangladesh
+STEP 2: Based on your observation, provide:
 
-Crop Type: ${cropType || 'Unknown'}
+Crop: ${cropType || 'Unknown'}
 Location: ${location || 'Bangladesh'}
 
-Use Google Search grounding to find current, accurate information about what you identify in the image.
-
-Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations):
+Return ONLY this JSON (no other text):
 {
-  "pestName": "Specific name based on what you see in image",
+  "pestName": "Exact name from image",
   "pestNameBn": "বাংলা নাম",
-  "riskLevel": "High/Medium/Low based on actual image",
-  "riskLevelBn": "উচ্চ/মাঝারি/কম",
-  "description": "What you actually see in the image - describe in Bangla",
+  "riskLevel": "Low/Medium/High",
+  "riskLevelBn": "কম/মাঝারি/উচ্চ",
+  "description": "What you see in Bangla",
   "treatmentPlan": {
-    "immediateBn": ["action 1 in Bangla", "action 2 in Bangla", "action 3 in Bangla"],
-    "preventiveBn": ["prevention 1 in Bangla", "prevention 2 in Bangla", "prevention 3 in Bangla"]
+    "immediateBn": ["action 1", "action 2", "action 3"],
+    "preventiveBn": ["prevention 1", "prevention 2", "prevention 3"]
   }
 }`;
 
@@ -86,38 +84,43 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations)
     }
     
     console.log('Sending image to Gemini API, size:', imageData.length, 'bytes, type:', mimeType);
+    console.log('Image data preview (first 100 chars):', imageData.substring(0, 100));
+    
+    const requestPayload = {
+      contents: [{
+        parts: [
+          {
+            text: prompt
+          },
+          {
+            inline_data: {
+              mime_type: mimeType,
+              data: imageData
+            }
+          }
+        ]
+      }],
+      tools: [{
+        googleSearchRetrieval: {
+          dynamicRetrievalConfig: {
+            mode: "MODE_DYNAMIC",
+            dynamicThreshold: 0.3
+          }
+        }
+      }],
+      generationConfig: {
+        temperature: 0.1, // Very low for consistent results
+        topK: 20,
+        topP: 0.8,
+        maxOutputTokens: 2048
+      }
+    };
+    
+    console.log('Request payload prepared, calling Gemini API...');
     
     const response = await axios.post(
       `${GEMINI_API_URL}?key=${apiKey}`,
-      {
-        contents: [{
-          parts: [
-            {
-              text: prompt
-            },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: imageData
-              }
-            }
-          ]
-        }],
-        tools: [{
-          googleSearchRetrieval: {
-            dynamicRetrievalConfig: {
-              mode: "MODE_DYNAMIC",
-              dynamicThreshold: 0.3
-            }
-          } // Google Search grounding tool - MANDATORY
-        }],
-        generationConfig: {
-          temperature: 0.2, // Very low temperature for accurate, consistent analysis
-          topK: 20,
-          topP: 0.9,
-          maxOutputTokens: 2048
-        }
-      },
+      requestPayload,
       {
         headers: {
           'Content-Type': 'application/json'
@@ -126,16 +129,21 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations)
       }
     );
     
+    console.log('Gemini API response received, status:', response.status);
+    
     // Extract response text
     const responseText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
     if (!responseText) {
       console.error('Empty response from Gemini API');
+      console.error('Full response data:', JSON.stringify(response.data, null, 2));
       throw new Error('No response from Gemini API');
     }
     
-    console.log('Gemini API response received, length:', responseText.length);
-    console.log('First 200 chars:', responseText.substring(0, 200));
+    console.log('=== GEMINI API RESPONSE ===');
+    console.log('Response length:', responseText.length);
+    console.log('Full response:', responseText);
+    console.log('===========================');
     
     // Try to parse JSON from response
     let result;
@@ -196,12 +204,22 @@ Respond ONLY in valid JSON format (no markdown, no code blocks, no explanations)
       });
     }
     
-    // Return result with source indicator
-    res.json({
+    // Return result with source indicator and debug info
+    const finalResult = {
       ...result,
       source: 'gemini-live',
-      analyzedAt: new Date().toISOString()
-    });
+      analyzedAt: new Date().toISOString(),
+      imageAnalyzed: true,
+      apiResponseLength: responseText.length
+    };
+    
+    console.log('=== FINAL RESULT ===');
+    console.log('Pest Name:', finalResult.pestName);
+    console.log('Risk Level:', finalResult.riskLevel);
+    console.log('Source:', finalResult.source);
+    console.log('===================');
+    
+    res.json(finalResult);
     
   } catch (error) {
     console.error('Pest identification error:', error);

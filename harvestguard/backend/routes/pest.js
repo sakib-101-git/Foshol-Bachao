@@ -244,9 +244,10 @@ router.get('/test', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
     
-    // Simple text test
+    // Simple text test - use gemini-1.5-pro
+    const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
     const response = await axios.post(
-      `${GEMINI_API_URL}?key=${apiKey}`,
+      `${testUrl}?key=${apiKey}`,
       {
         contents: [{
           parts: [{

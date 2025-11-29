@@ -7,9 +7,8 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Gemini API endpoint - Use v1 API which is more stable
-// Try gemini-1.5-pro first, then fallback to gemini-pro
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1';
+// Gemini API endpoint - Use v1beta with correct model names
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /**
  * Identify pest from uploaded image using Gemini Visual RAG
@@ -123,11 +122,10 @@ Return ONLY valid JSON (no markdown, no code blocks):
     
     console.log('Request payload prepared, calling Gemini API...');
     
-    // Try multiple models in order
+    // Try multiple models in order - use the simplest one that works
     const modelsToTry = [
-      'gemini-1.5-pro',
-      'gemini-pro',
-      'gemini-1.5-flash'
+      'gemini-pro',  // Most basic, should always work
+      'models/gemini-pro'  // Alternative format
     ];
     
     let response;
@@ -136,13 +134,19 @@ Return ONLY valid JSON (no markdown, no code blocks):
     
     for (const model of modelsToTry) {
       try {
-        const apiUrl = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
-        console.log(`Trying model: ${model}`);
+        // Use direct URL format that works
+        const apiUrl = model.startsWith('models/') 
+          ? `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`
+          : `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
         
-        // Remove Google Search grounding if model doesn't support it
-        const payload = model === 'gemini-pro' 
-          ? { ...requestPayload, tools: undefined } // gemini-pro doesn't support tools
-          : requestPayload;
+        console.log(`Trying model: ${model} at ${apiUrl.substring(0, 80)}...`);
+        
+        // For gemini-pro, remove tools (not supported)
+        const payload = {
+          contents: requestPayload.contents,
+          generationConfig: requestPayload.generationConfig
+          // Remove tools for compatibility
+        };
         
         response = await axios.post(
           apiUrl,
@@ -160,14 +164,24 @@ Return ONLY valid JSON (no markdown, no code blocks):
         break;
       } catch (apiError) {
         lastError = apiError;
-        console.log(`❌ Model ${model} failed:`, apiError.response?.status, apiError.response?.data?.error?.message || apiError.message);
+        const errorMsg = apiError.response?.data?.error?.message || apiError.message;
+        console.log(`❌ Model ${model} failed:`, apiError.response?.status, errorMsg);
+        if (apiError.response?.status === 404) {
+          console.log('   → This model does not exist, trying next...');
+        }
         continue;
       }
     }
     
     if (!response) {
-      console.error('All models failed. Last error:', lastError?.response?.data || lastError?.message);
-      throw new Error(`Gemini API failed: ${lastError?.response?.data?.error?.message || lastError?.message}`);
+      const errorDetails = lastError?.response?.data || { message: lastError?.message || 'Unknown error' };
+      console.error('All models failed. Last error:', JSON.stringify(errorDetails, null, 2));
+      return res.status(500).json({
+        error: 'Gemini API failed',
+        errorBn: 'Gemini API ব্যর্থ হয়েছে',
+        details: errorDetails.error?.message || errorDetails.message,
+        hint: 'Check if API key is valid and models are available'
+      });
     }
     
     // Extract response text

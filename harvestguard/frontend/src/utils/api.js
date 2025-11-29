@@ -3,10 +3,21 @@
  */
 
 // Production API URL (Render) or localhost for development
-const API_BASE = import.meta.env.VITE_API_BASE || 
-  (window.location.hostname === 'localhost' 
-    ? 'http://localhost:3001/api' 
-    : 'https://foshol-bachao-api.onrender.com/api');
+const getApiBase = () => {
+  // Check for environment variable first
+  if (import.meta.env.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE;
+  }
+  // Use localhost for local development
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:3001/api';
+  }
+  // Production - use Render backend
+  return 'https://foshol-bachao-api.onrender.com/api';
+};
+
+const API_BASE = getApiBase();
+console.log('API Base URL:', API_BASE); // Debug log
 
 /**
  * Get auth token from localStorage
@@ -18,7 +29,7 @@ function getToken() {
 /**
  * Make an authenticated API request
  */
-async function apiRequest(endpoint, options = {}) {
+async function apiRequest(endpoint, options = {}, retries = 2) {
   // Auto-set token for all requests (no authentication required)
   let token = getToken();
   if (!token) {
@@ -32,11 +43,18 @@ async function apiRequest(endpoint, options = {}) {
     'Authorization': `Bearer ${token}`
   };
   
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  
   try {
+    console.log(`API Request: ${API_BASE}${endpoint}`);
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
-      headers
+      headers,
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -46,12 +64,21 @@ async function apiRequest(endpoint, options = {}) {
     const data = await response.json();
     return data;
   } catch (err) {
+    clearTimeout(timeoutId);
     console.error('API Error:', err);
+    
+    // Retry on network errors (Render cold start can take time)
+    if (retries > 0 && (err.name === 'AbortError' || err.message.includes('fetch'))) {
+      console.log(`Retrying... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      return apiRequest(endpoint, options, retries - 1);
+    }
+    
     // Re-throw with more context
     if (err.message) {
       throw err;
     }
-    throw new Error('Network error: Could not connect to server. Make sure backend is running on http://localhost:3001');
+    throw new Error('Network error: Could not connect to server');
   }
 }
 

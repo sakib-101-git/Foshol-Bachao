@@ -245,8 +245,16 @@ function BatchForm({ lang, onSubmit, onCancel }) {
   }, [formData.division]);
   
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    // For number inputs, keep as string but validate
+    if (type === 'number') {
+      // Allow empty string or valid numbers only
+      if (value === '' || !isNaN(value)) {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
   
   const handleSubmit = (e) => {

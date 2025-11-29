@@ -114,7 +114,7 @@ router.post('/process', upload.single('audio'), async (req, res) => {
         
         // Use Gemini for transcription
         const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiKey}`,
           {
             contents: [{
               parts: [{

@@ -7,8 +7,8 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Gemini API endpoint - Using gemini-1.5-pro for image analysis
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+// Gemini API endpoint - Using gemini-pro (most stable and widely available)
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
 /**
  * Identify pest from uploaded image using Gemini Visual RAG
@@ -244,8 +244,8 @@ router.get('/test', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
     
-    // Simple text test - use gemini-1.5-pro
-    const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+    // Simple text test - use gemini-pro
+    const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
     const response = await axios.post(
       `${testUrl}?key=${apiKey}`,
       {

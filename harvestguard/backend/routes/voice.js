@@ -211,11 +211,16 @@ router.post('/chat', async (req, res) => {
 async function processQuestion(text, req) {
   const lowerText = text.toLowerCase();
   
-  // Check against common questions
+  // Get batches from request body
+  const batches = req.body?.batches || [];
+  
+  // Check against common questions first
   for (const [key, config] of Object.entries(COMMON_QUESTIONS)) {
     if (config.pattern.test(lowerText)) {
       try {
-        return await config.handler(req);
+        // Pass batches in request body for handlers
+        const handlerReq = { body: { batches } };
+        return await config.handler(handlerReq);
       } catch (err) {
         console.error(`Error in handler for ${key}:`, err);
       }
@@ -227,9 +232,9 @@ async function processQuestion(text, req) {
   if (geminiKey) {
     try {
       // Get user's batch context for intelligent responses
-      const batches = req.body.batches || [];
+      const batches = req.body?.batches || [];
       const batchContext = batches.length > 0 
-        ? `User has ${batches.length} crop batch(es): ${batches.map(b => `${b.cropType} (${b.estimatedWeightKg}kg)`).join(', ')}`
+        ? `User has ${batches.length} crop batch(es): ${batches.map(b => `${b.cropType || 'Unknown'} (${b.estimatedWeightKg || 0}kg)`).join(', ')}`
         : 'User has no active batches';
       
       const response = await axios.post(

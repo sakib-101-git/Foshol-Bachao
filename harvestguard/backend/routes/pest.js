@@ -7,8 +7,9 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Gemini API endpoint - Using gemini-pro (most stable and widely available)
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+// Gemini API endpoint - Try multiple model options
+// gemini-pro-vision supports images, fallback to gemini-pro
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent';
 
 /**
  * Identify pest from uploaded image using Gemini Visual RAG
@@ -121,19 +122,41 @@ Return ONLY valid JSON (no markdown, no code blocks):
     };
     
     console.log('Request payload prepared, calling Gemini API...');
+    console.log('Using API URL:', GEMINI_API_URL);
     
-    const response = await axios.post(
-      `${GEMINI_API_URL}?key=${apiKey}`,
-      requestPayload,
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
+    let response;
+    try {
+      response = await axios.post(
+        `${GEMINI_API_URL}?key=${apiKey}`,
+        requestPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+      console.log('Gemini API response received, status:', response.status);
+    } catch (apiError) {
+      // If gemini-pro-vision fails, try gemini-pro
+      if (apiError.response?.status === 404) {
+        console.log('gemini-pro-vision not found, trying gemini-pro...');
+        const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+        response = await axios.post(
+          `${fallbackUrl}?key=${apiKey}`,
+          requestPayload,
+          {
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000
+          }
+        );
+        console.log('Fallback gemini-pro response received, status:', response.status);
+      } else {
+        throw apiError;
       }
-    );
-    
-    console.log('Gemini API response received, status:', response.status);
+    }
     
     // Extract response text
     const responseText = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -244,28 +267,69 @@ router.get('/test', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
     
-    // Simple text test - use gemini-pro
-    const testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-    const response = await axios.post(
-      `${testUrl}?key=${apiKey}`,
-      {
-        contents: [{
-          parts: [{
-            text: 'Say "API is working" if you can read this.'
+    // Simple text test - try gemini-pro first
+    let testUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    let response;
+    let modelUsed = 'gemini-pro';
+    
+    try {
+      response = await axios.post(
+        `${testUrl}?key=${apiKey}`,
+        {
+          contents: [{
+            parts: [{
+              text: 'Say "API is working" if you can read this.'
+            }]
           }]
-        }]
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000
+        }
+      );
+    } catch (error) {
+      // Try alternative models
+      const alternatives = [
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-pro-vision'
+      ];
+      
+      for (const model of alternatives) {
+        try {
+          testUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+          response = await axios.post(
+            `${testUrl}?key=${apiKey}`,
+            {
+              contents: [{
+                parts: [{
+                  text: 'Say "API is working" if you can read this.'
+                }]
+              }]
+            },
+            {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: 10000
+            }
+          );
+          modelUsed = model;
+          break;
+        } catch (altError) {
+          continue;
+        }
       }
-    );
+      
+      if (!response) {
+        throw error;
+      }
+    }
     
     const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
     
     res.json({
       status: 'success',
       apiKey: apiKey ? 'Present' : 'Missing',
+      model: modelUsed,
       response: text,
       timestamp: new Date().toISOString()
     });

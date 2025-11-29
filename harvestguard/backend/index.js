@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 
 // Load environment variables (create .env file with JWT_SECRET, etc.)
 require('dotenv').config();
@@ -13,13 +14,69 @@ require('dotenv').config();
 // Dynamic import for lowdb (ESM module)
 let db;
 
+// Default data for initialization
+const defaultLocations = {
+  "divisions": [
+    {"name": "Dhaka", "nameBn": "ঢাকা", "lat": 23.8103, "lon": 90.4125, "districts": [{"name": "Dhaka", "nameBn": "ঢাকা", "upazilas": [{"name": "Dhaka", "nameBn": "ঢাকা", "lat": 23.8103, "lon": 90.4125}]}]},
+    {"name": "Chittagong", "nameBn": "চট্টগ্রাম", "lat": 22.3569, "lon": 91.7832, "districts": [{"name": "Chittagong", "nameBn": "চট্টগ্রাম", "upazilas": [{"name": "Chittagong", "nameBn": "চট্টগ্রাম", "lat": 22.3569, "lon": 91.7832}]}]},
+    {"name": "Sylhet", "nameBn": "সিলেট", "lat": 24.8949, "lon": 91.8687, "districts": [{"name": "Sylhet", "nameBn": "সিলেট", "upazilas": [{"name": "Sylhet", "nameBn": "সিলেট", "lat": 24.8949, "lon": 91.8687}]}]},
+    {"name": "Rajshahi", "nameBn": "রাজশাহী", "lat": 24.3745, "lon": 88.6042, "districts": [{"name": "Rajshahi", "nameBn": "রাজশাহী", "upazilas": [{"name": "Rajshahi", "nameBn": "রাজশাহী", "lat": 24.3745, "lon": 88.6042}]}]},
+    {"name": "Khulna", "nameBn": "খুলনা", "lat": 22.8456, "lon": 89.5403, "districts": [{"name": "Khulna", "nameBn": "খুলনা", "upazilas": [{"name": "Khulna", "nameBn": "খুলনা", "lat": 22.8456, "lon": 89.5403}]}]},
+    {"name": "Barisal", "nameBn": "বরিশাল", "lat": 22.7010, "lon": 90.3535, "districts": [{"name": "Barisal", "nameBn": "বরিশাল", "upazilas": [{"name": "Barisal", "nameBn": "বরিশাল", "lat": 22.7010, "lon": 90.3535}]}]},
+    {"name": "Rangpur", "nameBn": "রংপুর", "lat": 25.7439, "lon": 89.2752, "districts": [{"name": "Rangpur", "nameBn": "রংপুর", "upazilas": [{"name": "Rangpur", "nameBn": "রংপুর", "lat": 25.7439, "lon": 89.2752}]}]},
+    {"name": "Mymensingh", "nameBn": "ময়মনসিংহ", "lat": 24.7471, "lon": 90.4203, "districts": [{"name": "Mymensingh", "nameBn": "ময়মনসিংহ", "upazilas": [{"name": "Mymensingh", "nameBn": "ময়মনসিংহ", "lat": 24.7471, "lon": 90.4203}]}]}
+  ]
+};
+
+const defaultMockWeather = {
+  "default": {
+    "current": {"temp": 28, "humidity": 72, "description": "Partly cloudy"},
+    "forecast": [
+      {"day": 1, "date": "Today", "temp": 28, "humidity": 72, "rainProbability": 25, "description": "Partly cloudy"},
+      {"day": 2, "date": "Tomorrow", "temp": 29, "humidity": 68, "rainProbability": 35, "description": "Scattered clouds"},
+      {"day": 3, "date": "Day 3", "temp": 30, "humidity": 75, "rainProbability": 55, "description": "Light rain expected"},
+      {"day": 4, "date": "Day 4", "temp": 27, "humidity": 82, "rainProbability": 70, "description": "Rain likely"},
+      {"day": 5, "date": "Day 5", "temp": 26, "humidity": 78, "rainProbability": 40, "description": "Clearing up"}
+    ]
+  }
+};
+
+const defaultDb = { users: [], batches: [], badges: [], lossEvents: [] };
+
 async function initDB() {
   const { Low } = await import('lowdb');
   const { JSONFile } = await import('lowdb/node');
   
-  const dbPath = path.join(__dirname, 'db', 'db.json');
+  // Create db directory if it doesn't exist
+  const dbDir = path.join(__dirname, 'db');
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log('Created db directory');
+  }
+  
+  // Create locations.json if it doesn't exist
+  const locationsPath = path.join(dbDir, 'locations.json');
+  if (!fs.existsSync(locationsPath)) {
+    fs.writeFileSync(locationsPath, JSON.stringify(defaultLocations, null, 2));
+    console.log('Created locations.json');
+  }
+  
+  // Create mockWeather.json if it doesn't exist
+  const mockWeatherPath = path.join(dbDir, 'mockWeather.json');
+  if (!fs.existsSync(mockWeatherPath)) {
+    fs.writeFileSync(mockWeatherPath, JSON.stringify(defaultMockWeather, null, 2));
+    console.log('Created mockWeather.json');
+  }
+  
+  // Create db.json if it doesn't exist
+  const dbPath = path.join(dbDir, 'db.json');
+  if (!fs.existsSync(dbPath)) {
+    fs.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2));
+    console.log('Created db.json');
+  }
+  
   const adapter = new JSONFile(dbPath);
-  db = new Low(adapter, { users: [], batches: [], badges: [], lossEvents: [] });
+  db = new Low(adapter, defaultDb);
   
   await db.read();
   

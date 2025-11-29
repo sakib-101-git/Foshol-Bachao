@@ -6,13 +6,54 @@ const path = require('path');
 
 const router = express.Router();
 
-// Load mock weather data
-const mockWeatherPath = path.join(__dirname, '../db/mockWeather.json');
-const mockWeather = JSON.parse(fs.readFileSync(mockWeatherPath, 'utf8'));
+// Default data in case files don't exist
+const defaultLocations = {
+  "divisions": [
+    {"name": "Dhaka", "nameBn": "ঢাকা", "lat": 23.8103, "lon": 90.4125, "districts": []},
+    {"name": "Chittagong", "nameBn": "চট্টগ্রাম", "lat": 22.3569, "lon": 91.7832, "districts": []},
+    {"name": "Sylhet", "nameBn": "সিলেট", "lat": 24.8949, "lon": 91.8687, "districts": []},
+    {"name": "Rajshahi", "nameBn": "রাজশাহী", "lat": 24.3745, "lon": 88.6042, "districts": []},
+    {"name": "Khulna", "nameBn": "খুলনা", "lat": 22.8456, "lon": 89.5403, "districts": []},
+    {"name": "Barisal", "nameBn": "বরিশাল", "lat": 22.7010, "lon": 90.3535, "districts": []},
+    {"name": "Rangpur", "nameBn": "রংপুর", "lat": 25.7439, "lon": 89.2752, "districts": []},
+    {"name": "Mymensingh", "nameBn": "ময়মনসিংহ", "lat": 24.7471, "lon": 90.4203, "districts": []}
+  ]
+};
 
-// Load locations for lat/lon lookup
-const locationsPath = path.join(__dirname, '../db/locations.json');
-const locations = JSON.parse(fs.readFileSync(locationsPath, 'utf8'));
+const defaultMockWeather = {
+  "default": {
+    "current": {"temp": 28, "humidity": 72, "description": "Partly cloudy"},
+    "forecast": [
+      {"day": 1, "date": "Today", "temp": 28, "humidity": 72, "rainProbability": 25},
+      {"day": 2, "date": "Tomorrow", "temp": 29, "humidity": 68, "rainProbability": 35},
+      {"day": 3, "date": "Day 3", "temp": 30, "humidity": 75, "rainProbability": 55},
+      {"day": 4, "date": "Day 4", "temp": 27, "humidity": 82, "rainProbability": 70},
+      {"day": 5, "date": "Day 5", "temp": 26, "humidity": 78, "rainProbability": 40}
+    ]
+  }
+};
+
+// Load data with fallback to defaults
+let mockWeather, locations;
+try {
+  const mockWeatherPath = path.join(__dirname, '../db/mockWeather.json');
+  mockWeather = fs.existsSync(mockWeatherPath) 
+    ? JSON.parse(fs.readFileSync(mockWeatherPath, 'utf8'))
+    : defaultMockWeather;
+} catch (e) {
+  console.log('Using default mock weather data');
+  mockWeather = defaultMockWeather;
+}
+
+try {
+  const locationsPath = path.join(__dirname, '../db/locations.json');
+  locations = fs.existsSync(locationsPath)
+    ? JSON.parse(fs.readFileSync(locationsPath, 'utf8'))
+    : defaultLocations;
+} catch (e) {
+  console.log('Using default locations data');
+  locations = defaultLocations;
+}
 
 /**
  * Find coordinates by name - searches divisions, districts, and upazilas

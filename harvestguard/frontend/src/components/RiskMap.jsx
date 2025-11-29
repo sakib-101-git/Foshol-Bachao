@@ -56,7 +56,25 @@ const generateRandomCoord = (centerLat, centerLon, radiusKm = 15) => {
   };
 };
 
-// Generate mock neighbor data
+// Generate mock user locations (blue markers)
+const generateMockUsers = (division, count = 12) => {
+  const center = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
+  const users = [];
+  
+  for (let i = 0; i < count; i++) {
+    const coord = generateRandomCoord(center.lat, center.lon, 20); // 20km radius
+    users.push({
+      id: `user-${i + 1}`,
+      lat: coord.lat,
+      lon: coord.lon,
+      isUser: true
+    });
+  }
+  
+  return users;
+};
+
+// Generate mock neighbor data (risk markers)
 const generateMockNeighbors = (division, count = 12) => {
   const center = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
   const cropTypes = Object.keys(CROP_TYPES_BN);
@@ -149,19 +167,18 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
   // Get center coordinates for the division
   const mapCenter = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
   
+  // Generate mock users (blue markers) - 10-15 users
+  const mockUsers = useMemo(() => {
+    return generateMockUsers(division, 12); // 12 demo users
+  }, [division]);
+  
   // Generate mock neighbors for the division (memoized)
   const neighbors = useMemo(() => {
     return generateMockNeighbors(division, 12);
   }, [division]);
   
-  // User's location (center of division or custom)
-  const farmerLocation = userLocation || {
-    lat: mapCenter.lat + 0.01,
-    lon: mapCenter.lon + 0.01
-  };
-  
   // Icons
-  const userIcon = createCustomIcon('#3b82f6', true); // Blue for user
+  const userIcon = createCustomIcon('#3b82f6', true); // Blue for users
   
   return (
     <div style={styles.container}>
@@ -185,7 +202,7 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
           </div>
           <div style={styles.legendItem}>
             <span style={{ ...styles.legendDot, background: '#3b82f6' }}></span>
-            <span>{lang === 'bn' ? 'আপনার অবস্থান' : 'Your Location'}</span>
+            <span>{lang === 'bn' ? 'কৃষকদের অবস্থান' : 'Farmers Location'}</span>
           </div>
         </div>
       </div>
@@ -263,6 +280,14 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
       
       {/* Stats Summary */}
       <div style={styles.stats}>
+        <div style={styles.statItem}>
+          <span style={styles.statValue}>
+            {mockUsers.length}
+          </span>
+          <span style={{ ...styles.statLabel, color: '#3b82f6' }}>
+            {lang === 'bn' ? 'সক্রিয় কৃষক' : 'Active Farmers'}
+          </span>
+        </div>
         <div style={styles.statItem}>
           <span style={styles.statValue}>
             {neighbors.filter(n => n.riskLevel === 'High').length}

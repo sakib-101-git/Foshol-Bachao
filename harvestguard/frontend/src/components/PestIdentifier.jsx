@@ -56,8 +56,15 @@ function PestIdentifier({ cropType, location, lang = 'bn' }) {
     setResult(null);
     
     try {
-      // Convert image to base64
+      // Convert image to base64 (already done in handleImageSelect)
       const base64Image = imagePreview;
+      
+      // Verify image data
+      if (!base64Image || base64Image.length < 100) {
+        throw new Error(lang === 'bn' ? 'ছবি ডেটা সঠিক নয়' : 'Invalid image data');
+      }
+      
+      console.log('Sending image to API, size:', base64Image.length, 'chars');
       
       const response = await fetch(`${API_BASE}/pest/identify`, {
         method: 'POST',
@@ -78,6 +85,19 @@ function PestIdentifier({ cropType, location, lang = 'bn' }) {
       }
       
       const data = await response.json();
+      
+      // Log response for debugging
+      console.log('Pest identification result:', {
+        source: data.source,
+        pestName: data.pestName,
+        riskLevel: data.riskLevel
+      });
+      
+      // Verify it's from Gemini (not mock)
+      if (data.source && data.source !== 'gemini-live' && data.source !== 'gemini') {
+        console.warn('Unexpected source:', data.source);
+      }
+      
       setResult(data);
     } catch (err) {
       console.error('Pest identification error:', err);

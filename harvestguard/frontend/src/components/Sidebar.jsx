@@ -190,6 +190,18 @@ function Sidebar({ lang, onLangChange }) {
         {/* Footer */}
         {!isCollapsed && (
           <div style={styles.footer}>
+            {/* Voice Chat Button */}
+            <button
+              style={styles.voiceChatBtn}
+              onClick={() => setShowVoiceChat(true)}
+              title={lang === 'bn' ? 'ভয়েস সহায়ক' : 'Voice Assistant'}
+            >
+              <span style={styles.voiceChatIcon}>🎤</span>
+              <span style={styles.voiceChatText}>
+                {lang === 'bn' ? 'ভয়েস সহায়ক' : 'Voice Assistant'}
+              </span>
+            </button>
+            
             {/* Logout */}
             <button
               style={{
@@ -213,6 +225,14 @@ function Sidebar({ lang, onLangChange }) {
           </div>
         )}
       </aside>
+      
+      {/* Voice Chat Component */}
+      {showVoiceChat && (
+        <VoiceChat 
+          lang={lang || getLanguage()} 
+          onClose={() => setShowVoiceChat(false)} 
+        />
+      )}
 
       {/* Toggle Button - Positioned between sidebar and content */}
       <button

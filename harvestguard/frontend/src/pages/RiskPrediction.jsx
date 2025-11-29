@@ -4,6 +4,7 @@ import { getToken, getLanguage, saveLanguage, getBatches } from '../utils/localS
 import { translations } from '../utils/translations';
 import { weather } from '../utils/api';
 import Sidebar from '../components/Sidebar';
+import SmartAlertSystem from '../components/SmartAlertSystem';
 
 /**
  * ETCL Risk Prediction Model
@@ -124,12 +125,14 @@ function RiskPrediction() {
       const location = getLocationForBatch(batch);
       const weatherResponse = await weather.get(location, lang);
       const currentWeather = weatherResponse.current || weatherResponse.forecast?.[0];
+      const tomorrowWeather = weatherResponse.forecast?.[1] || weatherResponse.forecast?.[0];
       
       // Format weather data for risk calculation
       const weatherForRisk = {
         temperature: currentWeather?.temp || 28,
         humidity: currentWeather?.humidity || 70,
-        rainProbability: currentWeather?.rainProbability || 20
+        rainProbability: currentWeather?.rainProbability || 20,
+        tomorrowRain: (tomorrowWeather?.rainProbability || 0) > 40
       };
       
       setWeatherData(weatherForRisk);
@@ -137,7 +140,7 @@ function RiskPrediction() {
     } catch (err) {
       console.error('Failed to fetch weather:', err);
       // Fallback to default weather if API fails
-      const fallbackWeather = { temperature: 28, humidity: 70, rainProbability: 20 };
+      const fallbackWeather = { temperature: 28, humidity: 70, rainProbability: 20, tomorrowRain: false };
       setWeatherData(fallbackWeather);
       setRiskAnalysis(calculateRisk(batch, fallbackWeather));
     } finally {
@@ -324,6 +327,14 @@ function RiskPrediction() {
                 )}
               </ul>
             </div>
+            
+            {/* B2: Smart Alert System */}
+            <SmartAlertSystem 
+              batch={selectedBatch}
+              weatherData={weatherData}
+              riskLevel={riskAnalysis.level}
+              lang={lang}
+            />
           </div>
         )}
         </div>

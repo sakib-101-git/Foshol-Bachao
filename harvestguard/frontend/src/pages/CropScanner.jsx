@@ -4,8 +4,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getToken, getLanguage, saveLanguage } from '../utils/localSync';
+import { getToken, getLanguage, saveLanguage, getBatches } from '../utils/localSync';
 import Sidebar from '../components/Sidebar';
+import PestIdentifier from '../components/PestIdentifier';
 
 const API_URL = "https://api-inference.huggingface.co/models/Mozilla-MobileNetV2-PlantDisease";
 
@@ -242,6 +243,7 @@ const formatLabel = (label) => {
 
 function CropScanner() {
   const [lang, setLang] = useState(getLanguage());
+  const [activeTab, setActiveTab] = useState('disease'); // 'disease' or 'pest'
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -250,8 +252,13 @@ function CropScanner() {
   const [modelLoading, setModelLoading] = useState(false);
   const [loadingTime, setLoadingTime] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [batches, setBatches] = useState([]);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    setBatches(getBatches());
+  }, []);
   
   // Get API token from environment
   const API_TOKEN = import.meta.env.VITE_HF_TOKEN;
@@ -373,6 +380,11 @@ function CropScanner() {
     return labels[status]?.[lang] || status;
   };
 
+  // Get user's primary crop and location for pest identifier
+  const primaryBatch = batches.length > 0 ? batches[0] : null;
+  const cropType = primaryBatch?.cropType || 'Unknown';
+  const location = primaryBatch?.division || primaryBatch?.district || 'Bangladesh';
+  
   return (
     <div style={styles.wrapper}>
       <Sidebar lang={lang} onLangChange={toggleLang} />
@@ -381,6 +393,45 @@ function CropScanner() {
         <h1 style={styles.title}>
           {lang === 'bn' ? 'ফসল স্বাস্থ্য স্ক্যানার' : 'Crop Health Scanner'}
         </h1>
+        
+        {/* Tab Navigation */}
+        <div style={styles.tabContainer}>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'disease' ? styles.tabActive : {})
+            }}
+            onClick={() => {
+              setActiveTab('disease');
+              setSelectedImage(null);
+              setPreviewUrl(null);
+              setResult(null);
+              setError(null);
+            }}
+          >
+            {lang === 'bn' ? '🌿 রোগ সনাক্তকরণ' : '🌿 Disease Detection'}
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'pest' ? styles.tabActive : {})
+            }}
+            onClick={() => {
+              setActiveTab('pest');
+              setSelectedImage(null);
+              setPreviewUrl(null);
+              setResult(null);
+              setError(null);
+            }}
+          >
+            {lang === 'bn' ? '🐛 পোকা শনাক্তকরণ' : '🐛 Pest Identification'}
+          </button>
+        </div>
+        
+        {activeTab === 'pest' ? (
+          <PestIdentifier cropType={cropType} location={location} lang={lang} />
+        ) : (
+          <>
         <p style={styles.subtitle}>
           {lang === 'bn'
             ? 'ফসলের ছবি আপলোড করুন এবং AI দিয়ে রোগ সনাক্ত করুন'
@@ -522,8 +573,11 @@ function CropScanner() {
             )}
           </>
         )}
+        </>
+        )}
         
         {/* Tips */}
+        {activeTab === 'disease' && (
         <div style={styles.tipsCard}>
           <h3 style={styles.tipsTitle}>
             {lang === 'bn' ? 'ভালো ফলাফলের জন্য' : 'For Best Results'}
@@ -547,8 +601,10 @@ function CropScanner() {
             </div>
           </div>
         </div>
+        )}
         
         {/* Service Status */}
+        {activeTab === 'disease' && (
         <div style={{
           ...styles.tokenStatus,
           background: '#f0fdf4',
@@ -556,6 +612,7 @@ function CropScanner() {
         }}>
           {lang === 'bn' ? '✅ স্ক্যানার প্রস্তুত - ছবি আপলোড করুন' : '✅ Scanner Ready - Upload Image'}
         </div>
+        )}
         </div>
       </div>
     </div>
@@ -576,7 +633,7 @@ const styles = {
     minHeight: '100vh'
   },
   content: {
-    maxWidth: '500px',
+    maxWidth: '700px',
     margin: '0 auto',
     padding: '20px 16px'
   },
@@ -592,6 +649,34 @@ const styles = {
     fontSize: '0.95rem',
     textAlign: 'center',
     marginBottom: '24px'
+  },
+  tabContainer: {
+    display: 'flex',
+    gap: '12px',
+    marginBottom: '24px',
+    background: '#ffffff',
+    padding: '8px',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+  },
+  tab: {
+    flex: 1,
+    padding: '12px 20px',
+    background: 'transparent',
+    border: '2px solid #e5e7eb',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    color: '#6b7280',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    fontFamily: 'inherit'
+  },
+  tabActive: {
+    background: 'linear-gradient(135deg, #1a3d1a 0%, #2d5a27 100%)',
+    color: '#ffffff',
+    borderColor: '#1a3d1a',
+    boxShadow: '0 2px 8px rgba(26, 61, 26, 0.3)'
   },
   uploadZone: {
     background: '#ffffff',

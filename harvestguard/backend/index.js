@@ -138,11 +138,13 @@ async function startServer() {
     const weatherRoutes = require('./routes/weather')(db);
     const exportRoutes = require('./routes/export')(db);
     const scannerRoutes = require('./routes/scanner')(db);
+    const pestRoutes = require('./routes/pest');
     
     app.use('/api/auth', authRoutes);
     app.use('/api/batches', batchRoutes);
     app.use('/api/weather', weatherRoutes);
     app.use('/api/export', exportRoutes);
+    app.use('/api/pest', pestRoutes);
     
     console.log('📷 Mounting scanner routes...');
     console.log('Scanner routes type:', typeof scannerRoutes);

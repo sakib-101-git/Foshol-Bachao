@@ -396,12 +396,12 @@ function Landing() {
           </p>
           
           <div className="cta-buttons">
-            <button 
+            <button
               className="btn btn-cta-primary"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/login')}
               type="button"
             >
-              {lang === 'bn' ? '🔓 অভিজ্ঞতা নিন' : '🔓 Click to Experience'}
+              {lang === 'bn' ? '🚀 শুরু করুন' : '🚀 Get Started'}
             </button>
           </div>
         </div>

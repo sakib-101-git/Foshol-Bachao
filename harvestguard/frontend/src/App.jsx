@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import RiskPrediction from './pages/RiskPrediction';
 import CropScanner from './pages/CropScanner';
 import LocalRiskMap from './pages/LocalRiskMap';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -22,21 +23,45 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
-        {/* A2: Farmer + Crop Management */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/profile" element={<Profile />} />
+        {/* Protected Routes - A2: Authentication Required */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } />
         
         {/* A3: Weather Forecast */}
-        <Route path="/weather" element={<Weather />} />
+        <Route path="/weather" element={
+          <ProtectedRoute>
+            <Weather />
+          </ProtectedRoute>
+        } />
         
         {/* A4: Risk Prediction & ETCL */}
-        <Route path="/risk-prediction" element={<RiskPrediction />} />
+        <Route path="/risk-prediction" element={
+          <ProtectedRoute>
+            <RiskPrediction />
+          </ProtectedRoute>
+        } />
         
         {/* A5: Crop Health Scanner */}
-        <Route path="/crop-scanner" element={<CropScanner />} />
+        <Route path="/crop-scanner" element={
+          <ProtectedRoute>
+            <CropScanner />
+          </ProtectedRoute>
+        } />
         
         {/* B1: Local Risk Map - Community Awareness */}
-        <Route path="/risk-map" element={<LocalRiskMap />} />
+        <Route path="/risk-map" element={
+          <ProtectedRoute>
+            <LocalRiskMap />
+          </ProtectedRoute>
+        } />
       </Routes>
     </Router>
   );

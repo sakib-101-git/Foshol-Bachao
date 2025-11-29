@@ -2,7 +2,11 @@
  * API Utilities - Backend communication functions
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+// Production API URL (Render) or localhost for development
+const API_BASE = import.meta.env.VITE_API_BASE || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001/api' 
+    : 'https://foshol-bachao-api.onrender.com/api');
 
 /**
  * Get auth token from localStorage

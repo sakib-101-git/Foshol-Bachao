@@ -47,6 +47,13 @@ async function initDB() {
   const { Low } = await import('lowdb');
   const { JSONFile } = await import('lowdb/node');
   
+  // Create uploads directory for voice files
+  const uploadsDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('Created uploads directory');
+  }
+  
   // Create db directory if it doesn't exist
   const dbDir = path.join(__dirname, 'db');
   if (!fs.existsSync(dbDir)) {

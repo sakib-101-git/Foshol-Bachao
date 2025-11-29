@@ -4,7 +4,8 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { getToken, clearAll } from '../utils/localSync';
+import { getToken, clearAll, getLanguage } from '../utils/localSync';
+import VoiceChat from './VoiceChat';
 
 const getPages = (lang) => [
   {
@@ -52,12 +53,14 @@ function Sidebar({ lang, onLangChange }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isLogoutHovered, setIsLogoutHovered] = useState(false);
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const isLoggedIn = true; // Always logged in - no authentication required
 
   const pages = getPages(lang);
   const currentPath = location.pathname;
+  const currentLang = lang || getLanguage();
 
   const handleLogout = () => {
     clearAll();
@@ -467,6 +470,30 @@ const styles = {
     lineHeight: '1.2'
   },
   logoutText: {
+    textAlign: 'center'
+  },
+  voiceChatBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '10px 16px',
+    background: 'rgba(59, 130, 246, 0.15)',
+    border: '1px solid rgba(59, 130, 246, 0.4)',
+    borderRadius: '8px',
+    color: '#60a5fa',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    transition: 'all 0.2s ease',
+    marginBottom: '12px',
+    width: '100%'
+  },
+  voiceChatIcon: {
+    fontSize: '1.2rem'
+  },
+  voiceChatText: {
     textAlign: 'center'
   }
 };

@@ -210,7 +210,9 @@ Return ONLY this JSON (no other text):
       source: 'gemini-live',
       analyzedAt: new Date().toISOString(),
       imageAnalyzed: true,
-      apiResponseLength: responseText.length
+      apiResponseLength: responseText.length,
+      // Include raw response for debugging (only in development)
+      rawResponse: process.env.NODE_ENV !== 'production' ? responseText.substring(0, 1000) : undefined
     };
     
     console.log('=== FINAL RESULT ===');
@@ -227,6 +229,46 @@ Return ONLY this JSON (no other text):
       error: 'Failed to identify pest',
       errorBn: 'পোকা শনাক্ত করতে ব্যর্থ',
       details: error.message
+    });
+  }
+});
+
+/**
+ * Test endpoint to verify Gemini API is working
+ */
+router.get('/test', async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBRV82g6JvBOinQUJiN1iXMwuxLb5bqL2o';
+    
+    // Simple text test
+    const response = await axios.post(
+      `${GEMINI_API_URL}?key=${apiKey}`,
+      {
+        contents: [{
+          parts: [{
+            text: 'Say "API is working" if you can read this.'
+          }]
+        }]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      }
+    );
+    
+    const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+    
+    res.json({
+      status: 'success',
+      apiKey: apiKey ? 'Present' : 'Missing',
+      response: text,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      details: error.response?.data || 'No details'
     });
   }
 });

@@ -275,10 +275,23 @@ function PestIdentifier({ cropType, location, lang = 'bn' }) {
             <div style={styles.sourceInfo}>
               <span style={styles.sourceText}>
                 {lang === 'bn' 
-                  ? `তথ্যের উৎস: ${result.source === 'gemini' ? 'Gemini AI (Google Search)' : 'Mock Data'}`
-                  : `Source: ${result.source === 'gemini' ? 'Gemini AI (Google Search)' : 'Mock Data'}`}
+                  ? `তথ্যের উৎস: ${result.source === 'gemini-live' || result.source === 'gemini' ? 'Gemini AI (লাইভ)' : result.source}`
+                  : `Source: ${result.source === 'gemini-live' || result.source === 'gemini' ? 'Gemini AI (Live)' : result.source}`}
               </span>
+              {result.analyzedAt && (
+                <span style={styles.sourceText}>
+                  {lang === 'bn' ? ` | বিশ্লেষণ: ${new Date(result.analyzedAt).toLocaleTimeString('bn-BD')}` : ` | Analyzed: ${new Date(result.analyzedAt).toLocaleTimeString()}`}
+                </span>
+              )}
             </div>
+          )}
+          
+          {/* Debug Info (only in development) */}
+          {import.meta.env.DEV && result.rawResponse && (
+            <details style={styles.debugInfo}>
+              <summary style={styles.debugSummary}>🔍 Debug Info (Development Only)</summary>
+              <pre style={styles.debugText}>{result.rawResponse}</pre>
+            </details>
           )}
           
           {/* Reset Button */}
@@ -489,11 +502,36 @@ const styles = {
     marginTop: '20px',
     paddingTop: '16px',
     borderTop: '1px solid #d1d5db',
-    textAlign: 'center'
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
   },
   sourceText: {
     fontSize: '0.8rem',
     color: '#6b7280'
+  },
+  debugInfo: {
+    marginTop: '16px',
+    padding: '12px',
+    background: '#f3f4f6',
+    borderRadius: '8px',
+    border: '1px solid #d1d5db'
+  },
+  debugSummary: {
+    cursor: 'pointer',
+    fontWeight: '600',
+    color: '#374151',
+    fontSize: '0.85rem'
+  },
+  debugText: {
+    marginTop: '8px',
+    fontSize: '0.75rem',
+    color: '#6b7280',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    maxHeight: '200px',
+    overflow: 'auto'
   },
   resetButton: {
     width: '100%',

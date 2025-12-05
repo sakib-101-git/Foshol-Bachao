@@ -1,0 +1,8 @@
+.env
+.env.local
+node_modules/
+uploads/
+db/db.json
+db/*.json
+*.log
+/.vite

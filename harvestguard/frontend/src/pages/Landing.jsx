@@ -201,10 +201,18 @@ function Landing() {
           <div className="hero-buttons">
             <button 
               className="btn btn-hero-primary"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/login')}
               type="button"
             >
-              {lang === 'bn' ? '🔓 অভিজ্ঞতা নিন' : '🔓 Click to Experience'}
+              {lang === 'bn' ? '🔑 কৃষক লগইন' : '🔑 Farmer Login'}
+            </button>
+
+            <button
+              className="btn btn-hero-secondary"
+              onClick={() => navigate('/register')}
+              type="button"
+            >
+              {lang === 'bn' ? '✍️ নতুন কৃষক? রেজিস্ট্রেশন করুন' : '✍️ New Farmer? Register'}
             </button>
           </div>
         </div>

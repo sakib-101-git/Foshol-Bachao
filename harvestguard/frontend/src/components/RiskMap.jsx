@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { API_BASE } from '../utils/api';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -167,9 +168,39 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
   // Get center coordinates for the division
   const mapCenter = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
   
-  // Generate mock users (blue markers) - 10-15 users
-  const mockUsers = useMemo(() => {
-    return generateMockUsers(division, 12); // 12 demo users
+  // Remote active users - fetch from backend, fallback to mock users
+  const [activeUsers, setActiveUsers] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    const url = `${API_BASE}/users/active`;
+    fetch(url).then(r => r.json()).then(data => {
+      if (!mounted) return;
+      if (data && Array.isArray(data.users) && data.users.length > 0) {
+        // Map API users to marker shape
+        const users = data.users.map((u, i) => {
+          // If division has center, randomize within radius using existing helper
+          const center = DIVISION_COORDS[u.division] || DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
+          const coord = generateRandomCoord(center.lat, center.lon, 20);
+          return {
+            id: u.anonId || `user-${i}`,
+            lat: coord.lat,
+            lon: coord.lon,
+            cropTypes: u.cropTypes || [],
+            division: u.division,
+            district: u.district,
+            lastSeen: u.lastSeen
+          };
+        });
+        setActiveUsers(users);
+      } else {
+        setActiveUsers(generateMockUsers(division, 12));
+      }
+    }).catch(err => {
+      console.warn('Failed to fetch active users, using mock', err);
+      setActiveUsers(generateMockUsers(division, 12));
+    });
+
+    return () => { mounted = false; };
   }, [division]);
   
   // Generate mock neighbors for the division (memoized)
@@ -225,8 +256,8 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
           {/* Map center controller */}
           <MapCenterController center={mapCenter} zoom={mapCenter.zoom} />
           
-          {/* Demo Users - Blue pins (10-15 users) */}
-          {mockUsers.map((user) => (
+          {/* Active Users - Blue pins (10-15 users) */}
+          {activeUsers.map((user) => (
             <Marker
               key={user.id}
               position={[user.lat, user.lon]}
@@ -239,8 +270,8 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
                   </h4>
                   <p style={styles.popupText}>
                     {lang === 'bn' 
-                      ? `${division} - সক্রিয় কৃষক`
-                      : `${division} - Active Farmer`}
+                      ? `${user.division || division} - সক্রিয় (ফসল: ${user.cropTypes?.slice(0,2).map(ct => CROP_TYPES_BN[ct]||ct).join(', ') || 'অজানা'})`
+                      : `${user.division || division} - Active (Crops: ${user.cropTypes?.slice(0,2).join(', ') || 'Unknown'})`}
                   </p>
                 </div>
               </Popup>

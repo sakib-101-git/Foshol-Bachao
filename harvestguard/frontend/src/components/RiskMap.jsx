@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE } from '../utils/api';
+import { getBatches } from '../utils/localSync';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Fix for default marker icons in React-Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -12,233 +12,152 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Division center coordinates for Bangladesh
 const DIVISION_COORDS = {
-  'Dhaka': { lat: 23.8103, lon: 90.4125, zoom: 10 },
+  'Dhaka':      { lat: 23.8103, lon: 90.4125, zoom: 10 },
   'Chittagong': { lat: 22.3569, lon: 91.7832, zoom: 10 },
-  'Rajshahi': { lat: 24.3745, lon: 88.6042, zoom: 10 },
-  'Khulna': { lat: 22.8456, lon: 89.5403, zoom: 10 },
-  'Sylhet': { lat: 24.8949, lon: 91.8687, zoom: 10 },
-  'Barisal': { lat: 22.7010, lon: 90.3535, zoom: 10 },
-  'Rangpur': { lat: 25.7439, lon: 89.2752, zoom: 10 },
+  'Rajshahi':   { lat: 24.3745, lon: 88.6042, zoom: 10 },
+  'Khulna':     { lat: 22.8456, lon: 89.5403, zoom: 10 },
+  'Sylhet':     { lat: 24.8949, lon: 91.8687, zoom: 10 },
+  'Barisal':    { lat: 22.7010, lon: 90.3535, zoom: 10 },
+  'Rangpur':    { lat: 25.7439, lon: 89.2752, zoom: 10 },
   'Mymensingh': { lat: 24.7471, lon: 90.4203, zoom: 10 }
 };
 
-// Crop types in Bangla
 const CROP_TYPES_BN = {
-  'Paddy': 'ধান',
-  'Wheat': 'গম',
-  'Maize': 'ভুট্টা',
-  'Potato': 'আলু',
-  'Onion': 'পেঁয়াজ',
-  'Vegetables': 'শাকসবজি',
-  'Lentils': 'ডাল',
-  'Mustard': 'সরিষা',
-  'Jute': 'পাট',
-  'Sugarcane': 'আখ'
+  'Paddy': 'ধান', 'Wheat': 'গম', 'Maize': 'ভুট্টা', 'Potato': 'আলু',
+  'Onion': 'পেঁয়াজ', 'Vegetables': 'শাকসবজি', 'Lentils': 'ডাল',
+  'Mustard': 'সরিষা', 'Jute': 'পাট', 'Sugarcane': 'আখ'
+};
+const RISK_LEVELS_BN = { 'Low': 'কম', 'Medium': 'মাঝারি', 'High': 'উচ্চ' };
+
+const getRiskColor = (level) =>
+  ({ Low: '#22c55e', Medium: '#f59e0b', High: '#ef4444' }[level] || '#6b7280');
+
+// Spread pins slightly so they don't overlap at the same division center
+const spreadCoord = (baseLat, baseLon, index, total) => {
+  if (total <= 1) return { lat: baseLat, lon: baseLon };
+  const angle = (2 * Math.PI * index) / total;
+  const r = 0.04 + 0.02 * Math.floor(index / 8); // ~4-6 km spread
+  return { lat: baseLat + r * Math.cos(angle), lon: baseLon + r * Math.sin(angle) };
 };
 
-// Risk levels in Bangla
-const RISK_LEVELS_BN = {
-  'Low': 'কম',
-  'Medium': 'মাঝারি',
-  'High': 'উচ্চ'
-};
+const createPinIcon = (color, size = 30) => L.divIcon({
+  html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}">
+    <path fill="${color}" stroke="#fff" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+    <circle fill="#fff" cx="12" cy="9" r="3"/>
+  </svg>`,
+  className: '',
+  iconSize: [size, size],
+  iconAnchor: [size / 2, size],
+  popupAnchor: [0, -size]
+});
 
-// Generate random coordinate within radius of center
-const generateRandomCoord = (centerLat, centerLon, radiusKm = 15) => {
-  const radiusInDeg = radiusKm / 111; // Approximate degrees per km
-  const randomAngle = Math.random() * 2 * Math.PI;
-  const randomRadius = Math.random() * radiusInDeg;
-  
-  return {
-    lat: centerLat + randomRadius * Math.cos(randomAngle),
-    lon: centerLon + randomRadius * Math.sin(randomAngle)
-  };
-};
+const ownPinIcon = L.divIcon({
+  html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40">
+    <path fill="#3b82f6" stroke="#fff" stroke-width="2" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+    <text x="12" y="12" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#fff">★</text>
+  </svg>`,
+  className: '',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40]
+});
 
-// Generate mock user locations (blue markers)
-const generateMockUsers = (division, count = 12) => {
-  const center = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
-  const users = [];
-  
-  for (let i = 0; i < count; i++) {
-    const coord = generateRandomCoord(center.lat, center.lon, 20); // 20km radius
-    users.push({
-      id: `user-${i + 1}`,
-      lat: coord.lat,
-      lon: coord.lon,
-      isUser: true
-    });
-  }
-  
-  return users;
-};
+function formatTimeAgo(isoStr, lang) {
+  if (!isoStr) return lang === 'bn' ? 'অজানা' : 'Unknown';
+  const h = Math.floor((Date.now() - new Date(isoStr).getTime()) / 3600000);
+  if (h < 1) return lang === 'bn' ? 'এইমাত্র' : 'Just now';
+  if (h < 24) return lang === 'bn' ? `${h} ঘণ্টা আগে` : `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return lang === 'bn' ? `${d} দিন আগে` : `${d}d ago`;
+}
 
-// Generate mock neighbor data (risk markers)
-const generateMockNeighbors = (division, count = 12) => {
-  const center = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
-  const cropTypes = Object.keys(CROP_TYPES_BN);
-  const riskLevels = ['Low', 'Medium', 'High'];
-  
-  const neighbors = [];
-  
-  for (let i = 0; i < count; i++) {
-    const coord = generateRandomCoord(center.lat, center.lon);
-    const riskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-    const cropType = cropTypes[Math.floor(Math.random() * cropTypes.length)];
-    
-    // Random last update time (within last 7 days)
-    const hoursAgo = Math.floor(Math.random() * 168);
-    const lastUpdate = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
-    
-    neighbors.push({
-      id: `neighbor-${i + 1}`,
-      lat: coord.lat,
-      lon: coord.lon,
-      riskLevel,
-      cropType,
-      lastUpdate,
-      hoursAgo
-    });
-  }
-  
-  return neighbors;
-};
-
-// Custom marker icons
-const createCustomIcon = (color, isUser = false) => {
-  const size = isUser ? 40 : 30;
-  const svg = isUser 
-    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}">
-        <path fill="${color}" stroke="#fff" stroke-width="1.5" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-        <circle fill="#fff" cx="12" cy="9" r="3"/>
-       </svg>`
-    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}">
-        <path fill="${color}" stroke="#fff" stroke-width="1" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-        <circle fill="#fff" cx="12" cy="9" r="2.5"/>
-       </svg>`;
-  
-  return L.divIcon({
-    html: svg,
-    className: 'custom-marker',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size]
-  });
-};
-
-// Risk color mapping
-const getRiskColor = (riskLevel) => {
-  const colors = {
-    'Low': '#22c55e',    // Green
-    'Medium': '#f59e0b', // Yellow/Amber
-    'High': '#ef4444'    // Red
-  };
-  return colors[riskLevel] || '#6b7280';
-};
-
-// Format time ago in Bangla
-const formatTimeAgoBn = (hoursAgo) => {
-  if (hoursAgo < 1) return 'এইমাত্র';
-  if (hoursAgo < 24) return `${Math.floor(hoursAgo)} ঘণ্টা আগে`;
-  const days = Math.floor(hoursAgo / 24);
-  return `${days} দিন আগে`;
-};
-
-// Component to auto-center map when division changes
 function MapCenterController({ center, zoom }) {
   const map = useMap();
-  
   useEffect(() => {
-    if (center) {
-      map.setView([center.lat, center.lon], zoom);
-    }
+    if (center) map.setView([center.lat, center.lon], zoom);
   }, [center, zoom, map]);
-  
   return null;
 }
 
 /**
- * RiskMap Component - Local Risk Landscape Visualization
+ * B1 — Local Risk Map
+ * Shows only real registered farmers from the backend.
+ * No mock or randomly generated data.
  */
-function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
-  const [selectedNeighbor, setSelectedNeighbor] = useState(null);
-  
-  // Get center coordinates for the division
+function RiskMap({ division = 'Dhaka', lang = 'bn' }) {
+  const t = (bn, en) => lang === 'bn' ? bn : en;
   const mapCenter = DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
-  
-  // Remote active users - fetch from backend, fallback to mock users
-  const [activeUsers, setActiveUsers] = useState([]);
+
+  const [farmers, setFarmers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Own location from locally stored batches
+  const myBatches = getBatches();
+  const myDivision = myBatches.length > 0 ? (myBatches[0].division || division) : division;
+  const myCenter = DIVISION_COORDS[myDivision] || mapCenter;
+  const ownLocation = { lat: myCenter.lat + 0.008, lon: myCenter.lon + 0.008 };
+
   useEffect(() => {
     let mounted = true;
-    const url = `${API_BASE}/users/active`;
-    fetch(url).then(r => r.json()).then(data => {
-      if (!mounted) return;
-      if (data && Array.isArray(data.users) && data.users.length > 0) {
-        // Map API users to marker shape
-        const users = data.users.map((u, i) => {
-          // If division has center, randomize within radius using existing helper
-          const center = DIVISION_COORDS[u.division] || DIVISION_COORDS[division] || DIVISION_COORDS['Dhaka'];
-          const coord = generateRandomCoord(center.lat, center.lon, 20);
-          return {
-            id: u.anonId || `user-${i}`,
-            lat: coord.lat,
-            lon: coord.lon,
-            cropTypes: u.cropTypes || [],
-            division: u.division,
-            district: u.district,
-            lastSeen: u.lastSeen
-          };
+    setLoading(true);
+    fetch(`${API_BASE}/users/active`)
+      .then(r => r.json())
+      .then(data => {
+        if (!mounted) return;
+        const users = (data?.users || []).filter(u => u.division || u.district);
+
+        // Assign spread coordinates within each division
+        const divGroups = {};
+        users.forEach(u => {
+          const key = u.division || u.district || 'Dhaka';
+          if (!divGroups[key]) divGroups[key] = [];
+          divGroups[key].push(u);
         });
-        setActiveUsers(users);
-      } else {
-        setActiveUsers(generateMockUsers(division, 12));
-      }
-    }).catch(err => {
-      console.warn('Failed to fetch active users, using mock', err);
-      setActiveUsers(generateMockUsers(division, 12));
-    });
+
+        const placed = [];
+        Object.entries(divGroups).forEach(([div, group]) => {
+          const base = DIVISION_COORDS[div] || mapCenter;
+          group.forEach((u, idx) => {
+            const coord = spreadCoord(base.lat, base.lon, idx, group.length);
+            placed.push({ ...u, lat: coord.lat, lon: coord.lon });
+          });
+        });
+
+        setFarmers(placed);
+      })
+      .catch(() => setFarmers([]))
+      .finally(() => { if (mounted) setLoading(false); });
 
     return () => { mounted = false; };
   }, [division]);
-  
-  // Generate mock neighbors for the division (memoized)
-  const neighbors = useMemo(() => {
-    return generateMockNeighbors(division, 12);
-  }, [division]);
-  
-  // Icons
-  const userIcon = createCustomIcon('#3b82f6', true); // Blue for users
-  
+
+  const highCount   = farmers.filter(f => f.riskLevel === 'High').length;
+  const mediumCount = farmers.filter(f => f.riskLevel === 'Medium').length;
+  const lowCount    = farmers.filter(f => f.riskLevel === 'Low').length;
+  const totalCount  = farmers.length + 1; // +1 for own location
+
   return (
     <div style={styles.container}>
       {/* Legend */}
       <div style={styles.legend}>
-        <h4 style={styles.legendTitle}>
-          {lang === 'bn' ? 'ঝুঁকির মাত্রা' : 'Risk Level'}
-        </h4>
+        <h4 style={styles.legendTitle}>{t('ঝুঁকির মাত্রা', 'Risk Level')}</h4>
         <div style={styles.legendItems}>
-          <div style={styles.legendItem}>
-            <span style={{ ...styles.legendDot, background: '#22c55e' }}></span>
-            <span>{lang === 'bn' ? 'কম ঝুঁকি' : 'Low Risk'}</span>
-          </div>
-          <div style={styles.legendItem}>
-            <span style={{ ...styles.legendDot, background: '#f59e0b' }}></span>
-            <span>{lang === 'bn' ? 'মাঝারি ঝুঁকি' : 'Medium Risk'}</span>
-          </div>
-          <div style={styles.legendItem}>
-            <span style={{ ...styles.legendDot, background: '#ef4444' }}></span>
-            <span>{lang === 'bn' ? 'উচ্চ ঝুঁকি' : 'High Risk'}</span>
-          </div>
-          <div style={styles.legendItem}>
-            <span style={{ ...styles.legendDot, background: '#3b82f6' }}></span>
-            <span>{lang === 'bn' ? 'কৃষকদের অবস্থান' : 'Farmers Location'}</span>
-          </div>
+          {[
+            { color: '#3b82f6', label: t('আপনার অবস্থান', 'Your Location') },
+            { color: '#22c55e', label: t('কম ঝুঁকি', 'Low Risk') },
+            { color: '#f59e0b', label: t('মাঝারি ঝুঁকি', 'Medium Risk') },
+            { color: '#ef4444', label: t('উচ্চ ঝুঁকি', 'High Risk') },
+          ].map(({ color, label }) => (
+            <div key={label} style={styles.legendItem}>
+              <span style={{ ...styles.legendDot, background: color }} />
+              <span>{label}</span>
+            </div>
+          ))}
         </div>
       </div>
-      
-      {/* Map Container */}
+
+      {/* Map */}
       <div style={styles.mapWrapper}>
         <MapContainer
           center={[mapCenter.lat, mapCenter.lon]}
@@ -252,100 +171,105 @@ function RiskMap({ division = 'Dhaka', lang = 'bn', userLocation = null }) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          
-          {/* Map center controller */}
           <MapCenterController center={mapCenter} zoom={mapCenter.zoom} />
-          
-          {/* Active Users - Blue pins (10-15 users) */}
-          {activeUsers.map((user) => (
-            <Marker
-              key={user.id}
-              position={[user.lat, user.lon]}
-              icon={userIcon}
-            >
-              <Popup>
-                <div style={styles.popup}>
-                  <h4 style={styles.popupTitle}>
-                    {lang === 'bn' ? '👤 কৃষক' : '👤 Farmer'}
-                  </h4>
-                  <p style={styles.popupText}>
-                    {lang === 'bn' 
-                      ? `${user.division || division} - সক্রিয় (ফসল: ${user.cropTypes?.slice(0,2).map(ct => CROP_TYPES_BN[ct]||ct).join(', ') || 'অজানা'})`
-                      : `${user.division || division} - Active (Crops: ${user.cropTypes?.slice(0,2).join(', ') || 'Unknown'})`}
-                  </p>
+
+          {/* Own location — blue star pin */}
+          <Marker position={[ownLocation.lat, ownLocation.lon]} icon={ownPinIcon}>
+            <Popup>
+              <div style={styles.popup}>
+                <div style={{ ...styles.riskBadge, background: '#3b82f6' }}>
+                  {t('👤 আপনার অবস্থান', '👤 Your Location')}
                 </div>
-              </Popup>
-            </Marker>
-          ))}
-          
-          {/* Neighbor markers - Color coded by risk */}
-          {neighbors.map((neighbor) => (
+                <p style={styles.popupHint}>
+                  {t(`নিবন্ধিত বিভাগ: ${myDivision}`, `Registered division: ${myDivision}`)}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Real farmers from backend */}
+          {farmers.map((f) => (
             <Marker
-              key={neighbor.id}
-              position={[neighbor.lat, neighbor.lon]}
-              icon={createCustomIcon(getRiskColor(neighbor.riskLevel))}
-              eventHandlers={{
-                click: () => setSelectedNeighbor(neighbor)
-              }}
+              key={f.anonId}
+              position={[f.lat, f.lon]}
+              icon={createPinIcon(getRiskColor(f.riskLevel || 'Low'))}
             >
               <Popup>
                 <div style={styles.popup}>
-                  {/* All content in Bangla */}
-                  <div style={{
-                    ...styles.riskBadge,
-                    background: getRiskColor(neighbor.riskLevel)
-                  }}>
-                    ঝুঁকি: {RISK_LEVELS_BN[neighbor.riskLevel]}
+                  <div style={{ ...styles.riskBadge, background: getRiskColor(f.riskLevel || 'Low') }}>
+                    ঝুঁকি: {RISK_LEVELS_BN[f.riskLevel] || 'কম'}
                   </div>
-                  
+                  {f.cropTypes && f.cropTypes.length > 0 && (
+                    <div style={styles.popupRow}>
+                      <span style={styles.popupLabel}>ফসল:</span>
+                      <span style={styles.popupValue}>
+                        {f.cropTypes.slice(0, 2).map(c => CROP_TYPES_BN[c] || c).join(', ')}
+                      </span>
+                    </div>
+                  )}
                   <div style={styles.popupRow}>
-                    <span style={styles.popupLabel}>ফসল:</span>
-                    <span style={styles.popupValue}>{CROP_TYPES_BN[neighbor.cropType]}</span>
+                    <span style={styles.popupLabel}>এলাকা:</span>
+                    <span style={styles.popupValue}>{f.division || f.district}</span>
                   </div>
-                  
                   <div style={styles.popupRow}>
                     <span style={styles.popupLabel}>আপডেট:</span>
-                    <span style={styles.popupValue}>{formatTimeAgoBn(neighbor.hoursAgo)}</span>
+                    <span style={styles.popupValue}>{formatTimeAgo(f.lastSeen, lang)}</span>
                   </div>
                 </div>
               </Popup>
             </Marker>
           ))}
         </MapContainer>
+
+        {/* Empty state overlay */}
+        {!loading && farmers.length === 0 && (
+          <div style={styles.emptyOverlay}>
+            <div style={styles.emptyBox}>
+              <div style={styles.emptyIcon}>👥</div>
+              <p style={styles.emptyTitle}>
+                {t('এই এলাকায় এখনো কোনো কৃষক নিবন্ধিত হয়নি', 'No other farmers registered in this area yet')}
+              </p>
+              <p style={styles.emptyHint}>
+                {t('অন্য কৃষকরা নিবন্ধন করলে তাদের অবস্থান এখানে দেখাবে', 'When other farmers register, their locations will appear here')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div style={styles.emptyOverlay}>
+            <div style={styles.emptyBox}>
+              <div style={styles.loadingSpinner} />
+              <p style={styles.emptyHint}>{t('লোড হচ্ছে...', 'Loading...')}</p>
+            </div>
+          </div>
+        )}
       </div>
-      
-      {/* Stats Summary */}
+
+      {/* Stats */}
       <div style={styles.stats}>
         <div style={styles.statItem}>
-          <span style={styles.statValue}>
-            {mockUsers.length}
-          </span>
+          <span style={styles.statValue}>{totalCount}</span>
           <span style={{ ...styles.statLabel, color: '#3b82f6' }}>
-            {lang === 'bn' ? 'সক্রিয় কৃষক' : 'Active Farmers'}
+            {t('সক্রিয় কৃষক', 'Active Farmers')}
           </span>
         </div>
         <div style={styles.statItem}>
-          <span style={styles.statValue}>
-            {neighbors.filter(n => n.riskLevel === 'High').length}
-          </span>
+          <span style={styles.statValue}>{highCount}</span>
           <span style={{ ...styles.statLabel, color: '#ef4444' }}>
-            {lang === 'bn' ? 'উচ্চ ঝুঁকি' : 'High Risk'}
+            {t('উচ্চ ঝুঁকি', 'High Risk')}
           </span>
         </div>
         <div style={styles.statItem}>
-          <span style={styles.statValue}>
-            {neighbors.filter(n => n.riskLevel === 'Medium').length}
-          </span>
+          <span style={styles.statValue}>{mediumCount}</span>
           <span style={{ ...styles.statLabel, color: '#f59e0b' }}>
-            {lang === 'bn' ? 'মাঝারি' : 'Medium'}
+            {t('মাঝারি', 'Medium')}
           </span>
         </div>
         <div style={styles.statItem}>
-          <span style={styles.statValue}>
-            {neighbors.filter(n => n.riskLevel === 'Low').length}
-          </span>
+          <span style={styles.statValue}>{lowCount}</span>
           <span style={{ ...styles.statLabel, color: '#22c55e' }}>
-            {lang === 'bn' ? 'কম ঝুঁকি' : 'Low Risk'}
+            {t('কম ঝুঁকি', 'Low Risk')}
           </span>
         </div>
       </div>
@@ -358,7 +282,7 @@ const styles = {
     background: '#ffffff',
     borderRadius: '16px',
     overflow: 'hidden',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
     border: '2px solid #bbf7d0'
   },
   legend: {
@@ -370,14 +294,12 @@ const styles = {
     color: '#c9a227',
     fontSize: '1rem',
     fontWeight: '700',
-    marginBottom: '12px',
-    margin: 0
+    margin: '0 0 10px 0'
   },
   legendItems: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '12px',
-    marginTop: '10px'
+    gap: '12px'
   },
   legendItem: {
     display: 'flex',
@@ -390,55 +312,91 @@ const styles = {
     width: '12px',
     height: '12px',
     borderRadius: '50%',
-    border: '2px solid white'
+    border: '2px solid white',
+    flexShrink: 0
   },
   mapWrapper: {
-    height: '400px',
-    width: '100%'
+    height: '420px',
+    width: '100%',
+    position: 'relative'
   },
   map: {
     height: '100%',
     width: '100%'
   },
+  emptyOverlay: {
+    position: 'absolute',
+    bottom: '16px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 1000,
+    pointerEvents: 'none'
+  },
+  emptyBox: {
+    background: 'rgba(255,255,255,0.95)',
+    borderRadius: '12px',
+    padding: '16px 20px',
+    textAlign: 'center',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+    maxWidth: '280px'
+  },
+  emptyIcon: {
+    fontSize: '2rem',
+    marginBottom: '6px'
+  },
+  emptyTitle: {
+    fontSize: '0.88rem',
+    fontWeight: '600',
+    color: '#1a3d1a',
+    margin: '0 0 4px 0'
+  },
+  emptyHint: {
+    fontSize: '0.78rem',
+    color: '#6b7280',
+    margin: 0
+  },
+  loadingSpinner: {
+    width: '28px',
+    height: '28px',
+    border: '3px solid #e5e7eb',
+    borderTopColor: '#1a3d1a',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+    margin: '0 auto 8px'
+  },
   popup: {
     minWidth: '150px',
     padding: '4px'
   },
-  popupTitle: {
-    fontSize: '0.95rem',
-    fontWeight: '700',
-    color: '#1a3d1a',
-    marginBottom: '8px',
-    margin: '0 0 8px 0'
-  },
-  popupText: {
-    fontSize: '0.85rem',
-    color: '#374151',
-    margin: 0
-  },
   riskBadge: {
     display: 'inline-block',
-    padding: '6px 12px',
+    padding: '5px 12px',
     borderRadius: '20px',
-    color: '#ffffff',
+    color: '#fff',
     fontWeight: '700',
-    fontSize: '0.9rem',
-    marginBottom: '10px'
+    fontSize: '0.88rem',
+    marginBottom: '8px'
+  },
+  popupHint: {
+    fontSize: '0.8rem',
+    color: '#6b7280',
+    margin: 0
   },
   popupRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '4px 0',
-    borderBottom: '1px solid #e5e7eb'
+    borderBottom: '1px solid #e5e7eb',
+    gap: '12px'
   },
   popupLabel: {
-    fontSize: '0.85rem',
+    fontSize: '0.82rem',
     color: '#6b7280',
     fontWeight: '500'
   },
   popupValue: {
-    fontSize: '0.85rem',
+    fontSize: '0.82rem',
     color: '#1f2937',
     fontWeight: '600'
   },
@@ -459,10 +417,16 @@ const styles = {
     color: '#1a3d1a'
   },
   statLabel: {
-    fontSize: '0.8rem',
+    fontSize: '0.78rem',
     fontWeight: '600'
   }
 };
 
-export default RiskMap;
+if (typeof document !== 'undefined' && !document.getElementById('riskmap-spin')) {
+  const s = document.createElement('style');
+  s.id = 'riskmap-spin';
+  s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+  document.head.appendChild(s);
+}
 
+export default RiskMap;

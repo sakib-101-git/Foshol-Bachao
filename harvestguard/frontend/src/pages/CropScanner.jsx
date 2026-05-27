@@ -8,8 +8,6 @@ import { getToken, getLanguage, saveLanguage, getBatches } from '../utils/localS
 import Sidebar from '../components/Sidebar';
 import PestIdentifier from '../components/PestIdentifier';
 
-const API_URL = "https://api-inference.huggingface.co/models/Mozilla-MobileNetV2-PlantDisease";
-
 // Convert file to base64
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
@@ -24,91 +22,56 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Demo analysis when backend/API is unavailable
-const demoAnalysis = async () => {
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  const random = Math.random();
-  const scenarios = [
-    {
-      status: 'fresh',
-      confidence: 85 + Math.floor(Math.random() * 10),
-      label: 'Healthy Plant',
-      issueEn: 'Plant appears healthy',
-      issueBn: 'গাছ সুস্থ দেখাচ্ছে',
-      recommendationsEn: ['Plant looks healthy', 'Continue regular care', 'Monitor for changes'],
-      recommendationsBn: ['গাছ সুস্থ দেখাচ্ছে', 'নিয়মিত পরিচর্যা চালিয়ে যান', 'পরিবর্তন পর্যবেক্ষণ করুন']
-    },
-    {
-      status: 'warning',
-      confidence: 70 + Math.floor(Math.random() * 15),
-      label: 'Early Leaf Spot',
-      issueEn: 'Minor discoloration detected',
-      issueBn: 'সামান্য বিবর্ণতা সনাক্ত',
-      recommendationsEn: ['Monitor closely', 'Check for pests', 'Improve ventilation'],
-      recommendationsBn: ['ভালোভাবে পর্যবেক্ষণ করুন', 'পোকা পরীক্ষা করুন', 'বায়ু চলাচল উন্নত করুন']
-    },
-    {
-      status: 'rotten',
-      confidence: 80 + Math.floor(Math.random() * 15),
-      label: 'Disease Detected',
-      issueEn: 'Disease symptoms visible',
-      issueBn: 'রোগের লক্ষণ দৃশ্যমান',
-      recommendationsEn: ['Remove affected parts', 'Apply treatment', 'Isolate from healthy plants', 'Consult expert'],
-      recommendationsBn: ['আক্রান্ত অংশ সরান', 'চিকিৎসা প্রয়োগ করুন', 'সুস্থ গাছ থেকে আলাদা করুন', 'বিশেষজ্ঞের পরামর্শ নিন']
-    }
-  ];
-  
-  return scenarios[Math.floor(random * scenarios.length)];
-};
+// Deterministic fallback when all APIs fail
+const unavailableResult = () => ({
+  status: 'warning',
+  confidence: 0,
+  label: 'Analysis Unavailable',
+  issueEn: 'Unable to analyze image — check connection and try again',
+  issueBn: 'ছবি বিশ্লেষণ করা সম্ভব হয়নি — সংযোগ পরীক্ষা করুন',
+  recommendationsEn: ['Ensure the backend server is running on port 3002', 'Check your internet connection', 'Try again in a few moments'],
+  recommendationsBn: ['ব্যাকেন্ড সার্ভার পোর্ট ৩০০২-এ চালু আছে কিনা দেখুন', 'ইন্টারনেট সংযোগ পরীক্ষা করুন', 'কিছুক্ষণ পর আবার চেষ্টা করুন']
+});
 
-// Analyze image - Try backend first, fallback to direct API with demo mode
+// Analyze image using Gemini Vision via backend
 const analyzeImageWithAI = async (imageFile, apiToken) => {
-  // First try backend proxy
-  try {
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(imageFile);
-    });
-    
-    const token = localStorage.getItem('harvestguard_token') || 'demo-token-auto-login';
-    if (!localStorage.getItem('harvestguard_token')) {
-      localStorage.setItem('harvestguard_token', token);
-    }
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
-    
-    console.log('Trying backend proxy...');
-    const response = await fetch(`${API_BASE}/scanner/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ image: base64 })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      return processAPIResults(data.results || data);
-    }
-    
-    // If backend fails, use demo mode
-    console.log('Backend failed, using demo mode');
-    throw new Error('BACKEND_FAILED');
-    
-  } catch (err) {
-    if (err.message === 'BACKEND_FAILED' || err.message.includes('Failed to fetch')) {
-      // Use demo/fallback analysis
-      console.log('Using demo analysis mode');
-      return await demoAnalysis();
-    }
-    
-    // Handle other errors
-    console.error('AI Analysis error:', err);
-    throw err;
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3002/api';
+
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(imageFile);
+  });
+
+  const token = localStorage.getItem('harvestguard_token') || 'demo-token-auto-login';
+  if (!localStorage.getItem('harvestguard_token')) {
+    localStorage.setItem('harvestguard_token', token);
   }
+
+  const response = await fetch(`${API_BASE}/scanner/analyze`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ image: base64 })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      const wait = errorData.retryAfter || '60s';
+      throw new Error(`রেট লিমিট পৌঁছেছে। ${wait} পর আবার চেষ্টা করুন। (Rate limit — wait ${wait} and retry)`);
+    }
+    throw new Error(errorData.error || errorData.details || `Server error ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.roboflowResult) return processRoboflowResult(data.roboflowResult);
+  if (data.geminiResult) return processGeminiResult(data.geminiResult);
+  if (data.results) return processAPIResults(data.results);
+  throw new Error('Unexpected response format from server');
 };
 
 // Process API results
@@ -231,6 +194,47 @@ const processAPIResults = (results) => {
   };
 };
 
+// Process Roboflow disease detection result
+const processRoboflowResult = (rf) => {
+  const statusMap = { healthy: 'fresh', warning: 'warning', diseased: 'rotten' };
+  const status = statusMap[rf.status] || 'warning';
+  return {
+    status,
+    confidence: rf.confidence || 0,
+    label: rf.diseaseName || 'Unknown',
+    diseaseNameBn: rf.diseaseNameBn || 'অজানা',
+    severity: rf.severity || 'Low',
+    severityBn: rf.severityBn || 'কম',
+    description: rf.description || '',
+    descriptionEn: rf.descriptionEn || rf.description || '',
+    treatmentPlan: rf.treatmentPlan || null,
+    issueEn: rf.diseaseName || 'Unknown',
+    issueBn: rf.diseaseNameBn || 'অজানা',
+    source: 'roboflow'
+  };
+};
+
+// Process Gemini Vision disease detection result
+const processGeminiResult = (gemini) => {
+  const statusMap = { healthy: 'fresh', warning: 'warning', diseased: 'rotten' };
+  const status = statusMap[gemini.status] || 'warning';
+  return {
+    status,
+    confidence: gemini.confidence || 75,
+    label: gemini.diseaseName || 'Unknown',
+    diseaseNameBn: gemini.diseaseNameBn || 'অজানা',
+    severity: gemini.severity || 'Low',
+    severityBn: gemini.severityBn || 'কম',
+    description: gemini.description || '',
+    treatmentPlan: gemini.treatmentPlan || null,
+    issueEn: gemini.diseaseName || 'Unknown',
+    issueBn: gemini.diseaseNameBn || 'অজানা',
+    recommendationsEn: gemini.treatmentPlan?.immediateBn || [],
+    recommendationsBn: gemini.treatmentPlan?.immediateBn || [],
+    source: 'gemini-vision'
+  };
+};
+
 // Format label for display
 const formatLabel = (label) => {
   return label
@@ -253,8 +257,12 @@ function CropScanner() {
   const [loadingTime, setLoadingTime] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [batches, setBatches] = useState([]);
+  const [diseaseLocalLang, setDiseaseLocalLang] = useState(getLanguage());
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+
+  // Helper for disease section text (uses its own toggle)
+  const td = (bn, en) => diseaseLocalLang === 'bn' ? bn : en;
   
   useEffect(() => {
     setBatches(getBatches());
@@ -377,7 +385,7 @@ function CropScanner() {
       warning: { en: 'WARNING', bn: 'সতর্কতা' },
       rotten: { en: 'DISEASE DETECTED', bn: 'রোগ সনাক্ত' }
     };
-    return labels[status]?.[lang] || status;
+    return labels[status]?.[diseaseLocalLang] || status;
   };
 
   // Get user's primary crop and location for pest identifier
@@ -431,187 +439,204 @@ function CropScanner() {
         {activeTab === 'pest' ? (
           <PestIdentifier cropType={cropType} location={location} lang={lang} />
         ) : (
-          <>
-        <p style={styles.subtitle}>
-          {lang === 'bn'
-            ? 'ফসলের ছবি আপলোড করুন এবং AI দিয়ে রোগ সনাক্ত করুন'
-            : 'Upload a crop image to detect diseases using AI'}
-        </p>
-        
-        {/* Upload Zone */}
-        {!previewUrl ? (
-          <div
-            style={{
-              ...styles.uploadZone,
-              ...(dragActive ? styles.uploadZoneActive : {})
-            }}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={(e) => handleFileSelect(e.target.files?.[0])}
-            />
-            <div style={styles.uploadIcon}>📸</div>
-            <h3 style={styles.uploadTitle}>
-              {lang === 'bn' ? 'ছবি আপলোড করুন' : 'Upload Image'}
-            </h3>
-            <p style={styles.uploadText}>
-              {lang === 'bn' ? 'ক্লিক করুন বা ছবি টেনে আনুন' : 'Click or drag and drop'}
-            </p>
-            <div style={styles.formats}>JPG, PNG, WEBP</div>
-          </div>
-        ) : (
-          <>
-            {/* Preview */}
-            <div style={styles.previewCard}>
-              <div style={styles.imageWrapper}>
-                <img src={previewUrl} alt="Selected crop" style={styles.previewImage} />
-                {(analyzing || modelLoading) && (
-                  <div style={styles.overlay}>
-                    <div style={styles.spinner}></div>
-                    <p style={styles.overlayText}>
-                      {modelLoading 
-                        ? (lang === 'bn' ? `মডেল লোড হচ্ছে... ${loadingTime}s` : `Loading model... ${loadingTime}s`)
-                        : (lang === 'bn' ? 'বিশ্লেষণ করা হচ্ছে...' : 'Analyzing...')}
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Action Buttons */}
-              {!result && !analyzing && !modelLoading && (
-                <div style={styles.actions}>
-                  <button style={styles.analyzeBtn} onClick={handleAnalyze}>
-                    {lang === 'bn' ? 'বিশ্লেষণ করুন' : 'Analyze'}
-                  </button>
-                  <button style={styles.resetBtn} onClick={resetScanner}>
-                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
-                  </button>
-                </div>
-              )}
-              
-              {error && (
-                <div style={styles.errorBox}>
-                  <p style={styles.errorText}>{error}</p>
-                  <button style={styles.retryBtn} onClick={handleAnalyze}>
-                    {lang === 'bn' ? 'আবার চেষ্টা করুন' : 'Try Again'}
-                  </button>
-                </div>
-              )}
+          <div style={styles.diseaseContainer}>
+            {/* Header: title + language toggle */}
+            <div style={styles.diseaseHeader}>
+              <h3 style={styles.diseaseTitle}>🌿 {td('রোগ সনাক্তকরণ', 'Disease Detection')}</h3>
+              <button
+                onClick={() => setDiseaseLocalLang(l => l === 'bn' ? 'en' : 'bn')}
+                style={styles.langBtn}
+              >
+                {diseaseLocalLang === 'bn' ? 'EN' : 'বাংলা'}
+              </button>
             </div>
-            
-            {/* Results */}
-            {result && (
-              <div style={styles.resultCard}>
-                {/* Status */}
-                <div style={{...styles.statusBadge, background: getStatusColor(result.status)}}>
-                  {getStatusLabel(result.status)}
-                </div>
-                
-                {/* Confidence */}
-                <div style={styles.confidenceSection}>
-                  <span style={styles.confLabel}>
-                    {lang === 'bn' ? 'আত্মবিশ্বাস' : 'Confidence'}
-                  </span>
-                  <div style={styles.confBar}>
-                    <div style={{
-                      ...styles.confFill,
-                      width: `${result.confidence}%`,
-                      background: getStatusColor(result.status)
-                    }} />
-                  </div>
-                  <span style={styles.confValue}>{result.confidence}%</span>
-                </div>
-                
-                {/* Detection Label */}
-                <div style={styles.labelBox}>
-                  <span style={styles.labelTitle}>
-                    {lang === 'bn' ? 'সনাক্ত' : 'Detected'}:
-                  </span>
-                  <span style={styles.labelValue}>{result.label}</span>
-                </div>
-                
-                {/* All Results */}
-                {result.allResults && result.allResults.length > 1 && (
-                  <div style={styles.allResultsBox}>
-                    <h4 style={styles.allResultsTitle}>
-                      {lang === 'bn' ? 'সব ফলাফল' : 'All Results'}
-                    </h4>
-                    {result.allResults.map((r, idx) => (
-                      <div key={idx} style={styles.resultRow}>
-                        <span style={styles.resultLabel}>{formatLabel(r.label)}</span>
-                        <span style={styles.resultScore}>{Math.round(r.score * 100)}%</span>
+
+            {/* Upload Zone */}
+            {!previewUrl ? (
+              <div
+                style={{ ...styles.uploadZone, ...(dragActive ? styles.uploadZoneActive : {}) }}
+                onDragEnter={handleDrag} onDragLeave={handleDrag}
+                onDragOver={handleDrag} onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileSelect(e.target.files?.[0])}
+                />
+                <div style={styles.uploadIcon}>📸</div>
+                <p style={styles.uploadText}>{td('ফসলের ছবি আপলোড করুন', 'Upload a crop image')}</p>
+                <p style={styles.uploadHint}>{td('ক্লিক করুন বা ছবি টেনে আনুন — JPG, PNG, WEBP', 'Click or drag & drop — JPG, PNG, WEBP')}</p>
+              </div>
+            ) : (
+              <>
+                {/* Preview */}
+                <div style={styles.previewCard}>
+                  <div style={styles.imageWrapper}>
+                    <img src={previewUrl} alt="Selected crop" style={styles.previewImage} />
+                    {(analyzing || modelLoading) && (
+                      <div style={styles.overlay}>
+                        <div style={styles.spinner}></div>
+                        <p style={styles.overlayText}>
+                          {modelLoading
+                            ? td(`মডেল লোড হচ্ছে... ${loadingTime}s`, `Loading model... ${loadingTime}s`)
+                            : td('বিশ্লেষণ করা হচ্ছে...', 'Analyzing...')}
+                        </p>
                       </div>
-                    ))}
+                    )}
+                  </div>
+
+                  {!result && !analyzing && !modelLoading && (
+                    <div style={styles.actions}>
+                      <button style={styles.analyzeBtn} onClick={handleAnalyze}>
+                        🔍 {td('বিশ্লেষণ করুন', 'Analyze')}
+                      </button>
+                      <button style={styles.resetBtn} onClick={resetScanner}>
+                        {td('বাতিল', 'Cancel')}
+                      </button>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div style={styles.errorBox}>
+                      <p style={styles.errorText}>⚠️ {error}</p>
+                      <button style={styles.retryBtn} onClick={handleAnalyze}>
+                        {td('আবার চেষ্টা করুন', 'Try Again')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Results */}
+                {result && (
+                  <div style={styles.resultCard}>
+                    {/* Status badge */}
+                    <div style={{ ...styles.statusBadge, background: getStatusColor(result.status) }}>
+                      {getStatusLabel(result.status)}
+                    </div>
+
+                    {/* Disease name */}
+                    <div style={styles.diseaseNameBox}>
+                      <div style={styles.diseaseNameBn}>
+                        {td(result.diseaseNameBn || result.label, result.label)}
+                      </div>
+                      {result.diseaseNameBn && result.diseaseNameBn !== result.label && (
+                        <div style={styles.diseaseNameEn}>
+                          {td(result.label, result.diseaseNameBn)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Severity + Confidence */}
+                    <div style={styles.metaRow}>
+                      {result.severityBn && result.severity !== 'None' && (
+                        <span style={{
+                          ...styles.severityBadge,
+                          background: result.severity === 'High' ? '#fef2f2' : result.severity === 'Medium' ? '#fffbeb' : '#f0fdf4',
+                          color: result.severity === 'High' ? '#dc2626' : result.severity === 'Medium' ? '#d97706' : '#166534',
+                          border: `1px solid ${result.severity === 'High' ? '#fecaca' : result.severity === 'Medium' ? '#fde68a' : '#bbf7d0'}`
+                        }}>
+                          {td(`তীব্রতা: ${result.severityBn}`, `Severity: ${result.severity}`)}
+                        </span>
+                      )}
+                      <div style={styles.confidenceSection}>
+                        <span style={styles.confLabel}>{td('নির্ভুলতা', 'Confidence')}</span>
+                        <div style={styles.confBar}>
+                          <div style={{ ...styles.confFill, width: `${result.confidence}%`, background: getStatusColor(result.status) }} />
+                        </div>
+                        <span style={styles.confValue}>{result.confidence}%</span>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {(result.description || result.descriptionEn) && (
+                      <div style={styles.descriptionBox}>
+                        <p style={styles.descriptionText}>
+                          {td(result.description, result.descriptionEn || result.description)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Treatment plan */}
+                    {result.treatmentPlan && (
+                      <>
+                        {(result.treatmentPlan.immediateBn?.length > 0 || result.treatmentPlan.immediateEn?.length > 0) && (
+                          <div style={{ ...styles.recommendBox, borderColor: '#fecaca', background: '#fff5f5' }}>
+                            <h4 style={{ ...styles.recommendTitle, color: '#dc2626' }}>
+                              ⚡ {td('তাৎক্ষণিক ব্যবস্থা', 'Immediate Actions')}
+                            </h4>
+                            <ul style={{ ...styles.recommendList, color: '#7f1d1d' }}>
+                              {(diseaseLocalLang === 'bn'
+                                ? result.treatmentPlan.immediateBn
+                                : (result.treatmentPlan.immediateEn || result.treatmentPlan.immediateBn)
+                              )?.map((action, idx) => <li key={idx}>{action}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {(result.treatmentPlan.preventiveBn?.length > 0 || result.treatmentPlan.preventiveEn?.length > 0) && (
+                          <div style={styles.recommendBox}>
+                            <h4 style={styles.recommendTitle}>
+                              🛡️ {td('প্রতিরোধমূলক ব্যবস্থা', 'Preventive Measures')}
+                            </h4>
+                            <ul style={styles.recommendList}>
+                              {(diseaseLocalLang === 'bn'
+                                ? result.treatmentPlan.preventiveBn
+                                : (result.treatmentPlan.preventiveEn || result.treatmentPlan.preventiveBn)
+                              )?.map((action, idx) => <li key={idx}>{action}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* All predictions */}
+                    {result.allPredictions?.length > 1 && (
+                      <div style={styles.suggestionsBox}>
+                        <h4 style={styles.suggestionsTitle}>
+                          {td('অন্যান্য সম্ভাবনা', 'Other Possibilities')}
+                        </h4>
+                        {result.allPredictions.map((p, i) => (
+                          <div key={i} style={styles.suggestionRow}>
+                            <span style={styles.suggestionName}>{p.class}</span>
+                            <span style={styles.suggestionProb}>{p.confidence}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Source */}
+                    <div style={styles.sourceRow}>
+                      <span style={styles.sourceText}>
+                        {td('উৎস: Kindwise Plant.id', 'Source: Kindwise Plant.id')}
+                      </span>
+                    </div>
+
+                    {/* Scan Again */}
+                    <button style={styles.scanAgainBtn} onClick={resetScanner}>
+                      {td('🔄 আরেকটি ছবি স্ক্যান করুন', '🔄 Scan Another Image')}
+                    </button>
                   </div>
                 )}
-                
-                {/* Recommendations */}
-                <div style={styles.recommendBox}>
-                  <h4 style={styles.recommendTitle}>
-                    {lang === 'bn' ? 'পরামর্শ' : 'Recommendations'}
-                  </h4>
-                  <ul style={styles.recommendList}>
-                    {(lang === 'bn' ? result.recommendationsBn : result.recommendationsEn).map((rec, idx) => (
-                      <li key={idx}>{rec}</li>
-                    ))}
-                  </ul>
-                </div>
-                
-                {/* Scan Again */}
-                <button style={styles.scanAgainBtn} onClick={resetScanner}>
-                  {lang === 'bn' ? 'আরেকটি ছবি স্ক্যান করুন' : 'Scan Another Image'}
-                </button>
-              </div>
+              </>
             )}
-          </>
-        )}
-        </>
-        )}
-        
-        {/* Tips */}
-        {activeTab === 'disease' && (
-        <div style={styles.tipsCard}>
-          <h3 style={styles.tipsTitle}>
-            {lang === 'bn' ? 'ভালো ফলাফলের জন্য' : 'For Best Results'}
-          </h3>
-          <div style={styles.tipsGrid}>
-            <div style={styles.tipItem}>
-              <span>☀️</span>
-              <p>{lang === 'bn' ? 'ভালো আলো' : 'Good light'}</p>
+
+            {/* Tips */}
+            <div style={styles.tipsCard}>
+              <h3 style={styles.tipsTitle}>{td('ভালো ফলাফলের জন্য', 'For Best Results')}</h3>
+              <div style={styles.tipsGrid}>
+                {[['☀️', td('ভালো আলো','Good light')], ['🌿', td('পাতা দেখান','Show leaves')], ['📏', td('কাছ থেকে','Close-up')], ['🎯', td('পরিষ্কার','Clear')]].map(([icon, label]) => (
+                  <div key={label} style={styles.tipItem}><span>{icon}</span><p>{label}</p></div>
+                ))}
+              </div>
             </div>
-            <div style={styles.tipItem}>
-              <span>🌿</span>
-              <p>{lang === 'bn' ? 'পাতা দেখান' : 'Show leaves'}</p>
-            </div>
-            <div style={styles.tipItem}>
-              <span>📏</span>
-              <p>{lang === 'bn' ? 'কাছ থেকে' : 'Close-up'}</p>
-            </div>
-            <div style={styles.tipItem}>
-              <span>🎯</span>
-              <p>{lang === 'bn' ? 'পরিষ্কার' : 'Clear'}</p>
+
+            {/* Status */}
+            <div style={{ ...styles.tokenStatus, background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+              {td('✅ স্ক্যানার প্রস্তুত - ছবি আপলোড করুন', '✅ Scanner Ready — Upload an Image')}
             </div>
           </div>
-        </div>
-        )}
-        
-        {/* Service Status */}
-        {activeTab === 'disease' && (
-        <div style={{
-          ...styles.tokenStatus,
-          background: '#f0fdf4',
-          borderColor: '#bbf7d0'
-        }}>
-          {lang === 'bn' ? '✅ স্ক্যানার প্রস্তুত - ছবি আপলোড করুন' : '✅ Scanner Ready - Upload Image'}
-        </div>
         )}
         </div>
       </div>
@@ -679,13 +704,14 @@ const styles = {
     boxShadow: '0 2px 8px rgba(26, 61, 26, 0.3)'
   },
   uploadZone: {
-    background: '#ffffff',
-    border: '3px dashed #bbf7d0',
-    borderRadius: '16px',
-    padding: '50px 20px',
+    border: '3px dashed #c9a227',
+    borderRadius: '12px',
+    background: '#fefce8',
+    padding: '40px 20px',
     textAlign: 'center',
     cursor: 'pointer',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
+    marginBottom: '16px'
   },
   uploadZoneActive: {
     borderColor: '#1a3d1a',
@@ -811,18 +837,61 @@ const styles = {
   },
   statusBadge: {
     textAlign: 'center',
-    padding: '16px',
+    padding: '14px',
     borderRadius: '12px',
     color: '#ffffff',
-    fontSize: '1.2rem',
+    fontSize: '1.1rem',
     fontWeight: '700',
-    marginBottom: '20px'
+    marginBottom: '16px'
+  },
+  diseaseNameBox: {
+    textAlign: 'center',
+    marginBottom: '16px',
+    padding: '12px',
+    background: '#f9fafb',
+    borderRadius: '10px'
+  },
+  diseaseNameBn: {
+    fontSize: '1.3rem',
+    fontWeight: '700',
+    color: '#1a3d1a',
+    marginBottom: '4px'
+  },
+  diseaseNameEn: {
+    fontSize: '0.9rem',
+    color: '#6b7280'
+  },
+  metaRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginBottom: '16px'
+  },
+  severityBadge: {
+    display: 'inline-block',
+    padding: '6px 14px',
+    borderRadius: '20px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  descriptionBox: {
+    background: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: '10px',
+    padding: '12px',
+    marginBottom: '16px'
+  },
+  descriptionText: {
+    color: '#166534',
+    fontSize: '0.9rem',
+    lineHeight: '1.6',
+    margin: 0
   },
   confidenceSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    marginBottom: '20px'
+    gap: '12px'
   },
   confLabel: {
     fontSize: '0.85rem',
@@ -961,7 +1030,50 @@ const styles = {
     fontSize: '0.85rem',
     fontWeight: '600',
     border: '2px solid'
-  }
+  },
+  diseaseContainer: {
+    background: '#ffffff',
+    borderRadius: '16px',
+    padding: '20px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+    border: '2px solid #bbf7d0'
+  },
+  diseaseHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px'
+  },
+  diseaseTitle: {
+    fontSize: '1.2rem',
+    fontWeight: '700',
+    color: '#1a3d1a',
+    margin: 0
+  },
+  langBtn: {
+    padding: '6px 14px',
+    background: 'linear-gradient(135deg, #1a3d1a 0%, #2d5a27 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '20px',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    fontFamily: 'inherit'
+  },
+  uploadHint: { fontSize: '0.8rem', color: '#6b7280', margin: 0 },
+  suggestionsBox: {
+    background: '#f9fafb', borderRadius: '10px', padding: '12px', marginBottom: '12px'
+  },
+  suggestionsTitle: { fontSize: '0.88rem', fontWeight: '600', color: '#374151', marginBottom: '8px', margin: '0 0 8px 0' },
+  suggestionRow: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '5px 0', borderBottom: '1px solid #e5e7eb', fontSize: '0.85rem'
+  },
+  suggestionName: { color: '#374151' },
+  suggestionProb: { color: '#6b7280', fontWeight: '600' },
+  sourceRow: { marginBottom: '14px', textAlign: 'center' },
+  sourceText: { fontSize: '0.75rem', color: '#9ca3af' }
 };
 
 // Add spinner animation

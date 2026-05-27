@@ -1,301 +1,131 @@
 /**
  * B4: Bangla Voice/Touchless Interface Route
- * Handles voice input, speech-to-text, chat processing, and text-to-speech
  */
 
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
-// Configure multer for audio upload
-const upload = multer({
-  dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('audio/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only audio files are allowed'));
-    }
-  }
-});
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models';
 
-// Common questions and responses in Bangla
-const COMMON_QUESTIONS = {
-  'আজকের আবহাওয়া': {
-    pattern: /আজকের|আবহাওয়া|আবহাওয়া|weather|today/i,
-    handler: async (req) => {
-      // Get weather for user's location
-      const batches = req.body.batches || [];
-      const location = batches[0]?.division || batches[0]?.district || 'Dhaka';
-      
-      try {
-        const weatherResponse = await axios.get(
-          `https://api.openweathermap.org/data/2.5/weather?q=${location},BD&appid=${process.env.OPENWEATHER_API_KEY}&units=metric&lang=bn`
-        );
-        
-        const temp = Math.round(weatherResponse.data.main.temp);
-        const humidity = weatherResponse.data.main.humidity;
-        const description = weatherResponse.data.weather[0].description;
-        
-        return `আজকের আবহাওয়া ${location} এ ${temp} ডিগ্রি সেলসিয়াস। আর্দ্রতা ${humidity} শতাংশ। ${description}।`;
-      } catch (err) {
-        return 'আজকের আবহাওয়া ভালো। বৃষ্টির সম্ভাবনা কম।';
-      }
-    }
-  },
-  'আমার ধানের অবস্থা': {
-    pattern: /ধান|paddy|rice|অবস্থা|কেমন/i,
-    handler: async (req) => {
-      const batches = req.body.batches || [];
-      const paddyBatches = batches.filter(b => b.cropType === 'Paddy' && b.status === 'active');
-      
-      if (paddyBatches.length === 0) {
-        return 'আপনার কোন সক্রিয় ধান ব্যাচ নেই।';
-      }
-      
-      const totalWeight = paddyBatches.reduce((sum, b) => sum + (b.estimatedWeightKg || 0), 0);
-      return `আপনার ${paddyBatches.length}টি ধান ব্যাচ আছে, মোট ${totalWeight} কেজি। সব ব্যাচ সক্রিয় আছে।`;
-    }
-  },
-  'কখন কাটব': {
-    pattern: /কাটব|কাটা|harvest|কখন/i,
-    handler: async (req) => {
-      return 'ফসল কাটার উপযুক্ত সময় পরের সপ্তাহে। আবহাওয়া ভালো থাকলে কাটা শুরু করতে পারেন।';
-    }
-  },
-  'গুদামে কী করব': {
-    pattern: /গুদাম|storage|কী করব|কি করব|what to do/i,
-    handler: async (req) => {
-      return 'গুদামে আর্দ্রতা কম রাখুন। নিয়মিত বায়ু চলাচল নিশ্চিত করুন। ফ্যান চালু রাখুন যদি আর্দ্রতা বেশি হয়।';
-    }
-  },
-  'ঝুঁকি': {
-    pattern: /ঝুঁকি|risk|danger/i,
-    handler: async (req) => {
-      const batches = req.body.batches || [];
-      if (batches.length === 0) {
-        return 'আপনার কোন ব্যাচ নেই।';
-      }
-      
-      return 'আপনার ফসলের ঝুঁকি মাঝারি। আবহাওয়া ভালো আছে। নিয়মিত পরীক্ষা করুন।';
-    }
-  }
-};
+function buildPrompt(text, batches = []) {
+  const ctx = batches.length > 0
+    ? `কৃষকের ${batches.length}টি ফসল ব্যাচ আছে: ${batches.map(b => `${b.cropType || 'অজানা'} (${b.estimatedWeightKg || 0}কেজি)`).join(', ')}`
+    : 'কৃষকের কোন সক্রিয় ব্যাচ নেই';
 
-/**
- * Process voice input - Speech to Text + Chat + Text to Speech
- */
-router.post('/process', upload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        error: 'Audio file is required',
-        errorBn: 'অডিও ফাইল প্রয়োজন'
-      });
-    }
-    
-    // Use Web Speech API for transcription (client-side) or Google Cloud Speech-to-Text
-    // For now, we'll use a simple approach: send audio to Gemini for transcription
-    // In production, use Google Cloud Speech-to-Text API with language 'bn-BD'
-    
-    // Try to use Gemini API for speech-to-text if available
-    const geminiKey = process.env.GEMINI_API_KEY;
-    let transcription = '';
-    
-    if (geminiKey) {
-      try {
-        // Convert audio to base64
-        const audioBuffer = fs.readFileSync(req.file.path);
-        const audioBase64 = audioBuffer.toString('base64');
-        
-        // Use Gemini for transcription (if Web Speech API fails on frontend)
-        // Note: Frontend should use Web Speech API directly for better Bangla support
-        const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${geminiKey}`,
-          {
-            contents: [{
-              parts: [{
-                text: `Transcribe this Bangla (Bengali) audio to text. Return only the transcribed text in Bangla, no explanations.
+  return `আপনি বাংলাদেশের কৃষকদের জন্য একজন বিশেষজ্ঞ কৃষি সহকারী। নিচের প্রশ্নের উত্তর সম্পূর্ণ বাংলায় দিন।
 
-Audio file will be provided.`
-              }, {
-                inline_data: {
-                  mime_type: req.file.mimetype || 'audio/webm',
-                  data: audioBase64
-                }
-              }]
-            }]
-          },
-          {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 15000
-          }
-        );
-        
-        transcription = response.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-      } catch (err) {
-        console.error('Gemini transcription error:', err);
-        // Fallback: use common question detection based on audio length/pattern
-        transcription = 'আজকের আবহাওয়া কেমন'; // Default fallback
-      }
-    } else {
-      // No API key - use fallback
-      transcription = 'আজকের আবহাওয়া কেমন';
-    }
-    
-    // Process the question
-    const reply = await processQuestion(transcription, req);
-    
-    // Generate audio response (mock - in production use TTS)
-    // For now, return text response
-    // In production: Use Google Cloud TTS, Azure TTS, or gTTS for Bangla
-    
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path);
-    
-    res.json({
-      transcription: transcription,
-      reply: reply,
-      audioUrl: null // In production, return TTS audio URL
-    });
-    
-  } catch (error) {
-    console.error('Voice processing error:', error);
-    if (req.file) {
-      fs.unlinkSync(req.file.path).catch(() => {});
-    }
-    res.status(500).json({
-      error: 'Voice processing failed',
-      errorBn: 'ভয়েস প্রক্রিয়াকরণ ব্যর্থ'
-    });
-  }
-});
+কৃষকের প্রশ্ন: ${text}
+প্রেক্ষাপট: ${ctx}
+অবস্থান: বাংলাদেশ
 
-/**
- * Text chat endpoint (fallback)
- */
-router.post('/chat', async (req, res) => {
-  try {
-    const { text, lang, batches } = req.body;
-    
-    if (!text || !text.trim()) {
-      return res.status(400).json({
-        error: 'Text is required',
-        errorBn: 'টেক্সট প্রয়োজন'
-      });
-    }
-    
-    // Process the question with intelligent Gemini response
-    // Pass batches in request body for context
-    const requestWithBatches = {
-      ...req,
-      body: {
-        ...req.body,
-        batches: batches || []
-      }
-    };
-    
-    const reply = await processQuestion(text.trim(), requestWithBatches);
-    
-    res.json({
-      reply: reply,
-      audioUrl: null // In production, return TTS audio URL
-    });
-    
-  } catch (error) {
-    console.error('Chat error:', error);
-    res.status(500).json({
-      error: 'Chat failed',
-      errorBn: 'চ্যাট ব্যর্থ'
-    });
-  }
-});
-
-/**
- * Process question and generate response
- */
-async function processQuestion(text, req) {
-  const lowerText = text.toLowerCase();
-  
-  // Get batches from request body
-  const batches = req.body?.batches || [];
-  
-  // Check against common questions first
-  for (const [key, config] of Object.entries(COMMON_QUESTIONS)) {
-    if (config.pattern.test(lowerText)) {
-      try {
-        // Pass batches in request body for handlers
-        const handlerReq = { body: { batches } };
-        return await config.handler(handlerReq);
-      } catch (err) {
-        console.error(`Error in handler for ${key}:`, err);
-      }
-    }
-  }
-  
-  // Use Gemini API for intelligent responses (MANDATORY)
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    try {
-      // Get user's batch context for intelligent responses
-      const batches = req.body?.batches || [];
-      const batchContext = batches.length > 0 
-        ? `User has ${batches.length} crop batch(es): ${batches.map(b => `${b.cropType || 'Unknown'} (${b.estimatedWeightKg || 0}kg)`).join(', ')}`
-        : 'User has no active batches';
-      
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${geminiKey}`,
-        {
-          contents: [{
-            parts: [{
-              text: `You are an intelligent agricultural assistant for Bangladeshi farmers. Answer the farmer's question in Bangla (Bengali) with practical, helpful advice.
-
-Farmer's Question: ${text}
-
-Context: ${batchContext}
-Location: Bangladesh
-
-Requirements:
-- Answer entirely in Bangla
-- Be practical and specific
-- Consider the farmer's crop context
-- Provide actionable advice
-- Keep response concise (under 150 words)
-- Use local methods suitable for Bangladesh`
-            }]
-          }],
-          tools: [{
-            googleSearchRetrieval: {
-              dynamicRetrievalConfig: {
-                mode: "MODE_DYNAMIC",
-                dynamicThreshold: 0.3
-              }
-            }
-          }]
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 15000
-        }
-      );
-      
-      const reply = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (reply && reply.trim()) {
-        return reply.trim();
-      }
-    } catch (err) {
-      console.error('Gemini API error:', err);
-      // Fall through to default response
-    }
-  }
-  
-  // Default response
-  return 'আমি বুঝতে পারিনি। অনুগ্রহ করে আবার বলুন। আপনি জিজ্ঞাসা করতে পারেন: "আজকের আবহাওয়া", "আমার ধানের অবস্থা", "কখন কাটব", "গুদামে কী করব", "ঝুঁকি কেমন"।';
+নির্দেশনা:
+- সম্পূর্ণ বাংলায় উত্তর দিন
+- ব্যবহারিক ও সংক্ষিপ্ত (১৫০ শব্দের মধ্যে)
+- বাংলাদেশের কৃষি পরিবেশ অনুযায়ী পরামর্শ দিন`;
 }
 
-module.exports = router;
+/**
+ * POST /api/voice/chat/stream  — Server-Sent Events streaming
+ */
+router.post('/chat/stream', async (req, res) => {
+  const { text, lang, batches } = req.body;
 
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: 'Text is required' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  try {
+    const response = await axios.post(
+      `${GEMINI_BASE}/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
+      {
+        contents: [{ parts: [{ text: buildPrompt(text.trim(), batches || []) }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
+      },
+      { responseType: 'stream', timeout: 30000 }
+    );
+
+    let buffer = '';
+    response.data.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (!raw || raw === '[DONE]') continue;
+        try {
+          const json = JSON.parse(raw);
+          const part = json.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (part) {
+            res.write(`data: ${JSON.stringify({ chunk: part })}\n\n`);
+          }
+        } catch (_) {}
+      }
+    });
+
+    response.data.on('end', () => {
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    });
+
+    response.data.on('error', (err) => {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('Streaming error:', err.message);
+    res.write(`data: ${JSON.stringify({ error: 'Gemini streaming failed' })}\n\n`);
+    res.end();
+  }
+});
+
+/**
+ * POST /api/voice/chat  — non-streaming fallback
+ */
+router.post('/chat', async (req, res) => {
+  const { text, lang, batches } = req.body;
+
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: 'Text is required', errorBn: 'টেক্সট প্রয়োজন' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+  }
+
+  try {
+    const response = await axios.post(
+      `${GEMINI_BASE}/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: buildPrompt(text.trim(), batches || []) }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 20000 }
+    );
+
+    const reply = response.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+      || 'আমি বুঝতে পারিনি। অনুগ্রহ করে আবার জিজ্ঞাসা করুন।';
+
+    res.json({ reply });
+  } catch (err) {
+    console.error('Chat error:', err.message);
+    res.status(500).json({ error: 'Chat failed', errorBn: 'চ্যাট ব্যর্থ হয়েছে' });
+  }
+});
+
+module.exports = router;

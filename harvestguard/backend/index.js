@@ -147,6 +147,7 @@ async function startServer() {
     const scannerRoutes = require('./routes/scanner')(db);
     const pestRoutes = require('./routes/pest');
     const voiceRoutes = require('./routes/voice');
+    const usersRoutes = require('./routes/users')(db);
     
     app.use('/api/auth', authRoutes);
     app.use('/api/batches', batchRoutes);
@@ -154,6 +155,7 @@ async function startServer() {
     app.use('/api/export', exportRoutes);
     app.use('/api/pest', pestRoutes);
     app.use('/api/voice', voiceRoutes);
+    app.use('/api/users', usersRoutes);
     
     console.log('📷 Mounting scanner routes...');
     console.log('Scanner routes type:', typeof scannerRoutes);
@@ -212,74 +214,7 @@ async function startServer() {
     res.status(204).end(); // No content
   });
   
-  // Scanner routes - Direct implementation to avoid router issues
-  const axios = require('axios');
-  const { authMiddleware } = require('./utils/jwt');
-  const HF_TOKEN = process.env.HF_TOKEN || process.env.VITE_HF_TOKEN;
-  const HF_API_URL = "https://api-inference.huggingface.co/models/Mozilla-MobileNetV2-PlantDisease";
-  
-  app.get('/api/scanner/health', (req, res) => {
-    console.log('✅ /api/scanner/health endpoint hit!');
-    res.json({ 
-      status: 'ok',
-      hasToken: !!HF_TOKEN,
-      message: 'Scanner service is working'
-    });
-  });
-  
-  console.log('✅ Scanner routes registered: /api/scanner/health, /api/scanner/analyze');
-  
-  app.post('/api/scanner/analyze', authMiddleware, async (req, res) => {
-    try {
-      if (!HF_TOKEN) {
-        return res.status(500).json({ error: 'Hugging Face token not configured' });
-      }
-
-      let imageBuffer;
-      if (req.body && req.body.image) {
-        const base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, '');
-        imageBuffer = Buffer.from(base64Data, 'base64');
-      } else {
-        return res.status(400).json({ error: 'Invalid image data' });
-      }
-
-      console.log('Analyzing image with Hugging Face API...');
-      const response = await axios.post(HF_API_URL, imageBuffer, {
-        headers: {
-          'Authorization': `Bearer ${HF_TOKEN}`,
-          'Content-Type': 'application/octet-stream'
-        },
-        responseType: 'json',
-        validateStatus: () => true
-      });
-
-      if (response.status === 503) {
-        return res.status(503).json({
-          error: 'Model is loading',
-          estimated_time: response.data?.estimated_time || 30
-        });
-      }
-
-      if (response.status !== 200) {
-        return res.status(response.status).json({
-          error: `API error: ${response.status}`,
-          details: response.data
-        });
-      }
-
-      if (response.data.error) {
-        return res.status(500).json({ error: response.data.error });
-      }
-
-      res.json({ results: response.data });
-    } catch (err) {
-      console.error('Scanner error:', err.message);
-      res.status(500).json({ 
-        error: 'Failed to analyze image',
-        message: err.message 
-      });
-    }
-  });
+  console.log('✅ Scanner routes registered via router at /api/scanner');
   
   // 404 handler
   app.use((req, res) => {

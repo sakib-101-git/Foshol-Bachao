@@ -13,7 +13,6 @@ import RiskPrediction from './pages/RiskPrediction';
 import CropScanner from './pages/CropScanner';
 import LocalRiskMap from './pages/LocalRiskMap';
 import ProtectedRoute from './components/ProtectedRoute';
-import VoiceButton from './components/VoiceButton';
 
 function App() {
   return (
@@ -64,8 +63,6 @@ function App() {
           </ProtectedRoute>
         } />
       </Routes>
-      {/* Global voice assistant button */}
-      <VoiceButton />
     </Router>
   );
 }

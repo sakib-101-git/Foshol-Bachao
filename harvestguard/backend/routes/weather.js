@@ -232,30 +232,40 @@ module.exports = function(db) {
           const forecast = [];
           const dailyData = {};
           
+          const todayStr = new Date().toISOString().split('T')[0];
           forecastResponse.data.list.forEach(item => {
             const date = item.dt_txt.split(' ')[0];
+            if (date <= todayStr) return; // skip today and any stale past-date UTC slots
             if (!dailyData[date]) {
-              dailyData[date] = {
-                temps: [],
-                humidity: [],
-                rain: []
-              };
+              dailyData[date] = { temps: [], humidity: [], rain: [], descriptions: [], hour: [] };
             }
             dailyData[date].temps.push(item.main.temp);
             dailyData[date].humidity.push(item.main.humidity);
             dailyData[date].rain.push(item.pop * 100);
+            dailyData[date].descriptions.push(item.weather[0]?.description || '');
+            dailyData[date].hour.push(item.dt_txt.split(' ')[1]); // "12:00:00"
           });
-          
+
+          // Sort dates to ensure chronological order
+          const sortedDates = Object.keys(dailyData).sort();
+
           let dayCount = 0;
-          for (const [date, data] of Object.entries(dailyData)) {
+          for (const date of sortedDates) {
             if (dayCount >= 5) break;
+            const data = dailyData[date];
+            // Prefer noon slot description, else most frequent
+            const noonIdx = data.hour.indexOf('12:00:00');
+            const description = noonIdx >= 0
+              ? data.descriptions[noonIdx]
+              : data.descriptions[0] || 'Clear';
             forecast.push({
               day: dayCount + 1,
               date,
-              temp: Math.round(data.temps.reduce((a, b) => a + b, 0) / data.temps.length),
+              temp: Math.round(Math.max(...data.temps)),  // daily high
+              tempMin: Math.round(Math.min(...data.temps)), // daily low
               humidity: Math.round(data.humidity.reduce((a, b) => a + b, 0) / data.humidity.length),
               rainProbability: Math.round(Math.max(...data.rain)),
-              description: 'From API'
+              description
             });
             dayCount++;
           }

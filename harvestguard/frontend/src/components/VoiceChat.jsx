@@ -7,9 +7,7 @@ import { weather } from '../utils/api';
  * Voice recognition with chat interface
  */
 
-const API_BASE = import.meta.env.PROD
-  ? import.meta.env.VITE_API_BASE
-  : 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3002/api';
 
 function VoiceChat({ lang = 'bn', onClose }) {
   const [isRecording, setIsRecording] = useState(false);
@@ -209,60 +207,73 @@ function VoiceChat({ lang = 'bn', onClose }) {
     }
   };
   
-  // Handle voice transcript from Web Speech API
-  const handleVoiceTranscript = async (transcript) => {
+  const speak = (text) => {
+    if (!window.speechSynthesis || !text) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === 'bn' ? 'bn-BD' : 'en-US';
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const streamChat = async (text) => {
     setIsProcessing(true);
-    
-    // Add user message with transcript
-    const userMessage = {
-      type: 'user',
-      text: transcript,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
+    const botId = Date.now();
+    setMessages(prev => [...prev, { id: botId, type: 'bot', text: '', timestamp: new Date() }]);
+
     try {
-      // Send transcript to backend for response
-      const response = await fetch(`${API_BASE}/voice/chat`, {
+      const response = await fetch(`${API_BASE}/voice/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('harvestguard_token') || 'demo-token-auto-login'}`
         },
-        body: JSON.stringify({
-          text: transcript,
-          lang: lang,
-          batches: batches
-        })
+        body: JSON.stringify({ text, lang, batches })
       });
-      
-      if (!response.ok) {
-        throw new Error('Chat failed');
+
+      if (!response.ok) throw new Error('Stream failed');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const json = JSON.parse(line.slice(6));
+            if (json.chunk) {
+              fullText += json.chunk;
+              setMessages(prev => prev.map(m =>
+                m.id === botId ? { ...m, text: fullText } : m
+              ));
+            }
+            if (json.error) throw new Error(json.error);
+          } catch (_) {}
+        }
       }
-      
-      const data = await response.json();
-      
-      // Add bot response
-      const botMessage = {
-        type: 'bot',
-        text: data.reply,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botMessage]);
-      
-      // Play audio if available
-      if (data.audioUrl) {
-        playAudio(data.audioUrl);
-      }
-      
+
+      speak(fullText);
     } catch (err) {
-      console.error('Chat error:', err);
-      setError(lang === 'bn' 
-        ? 'চ্যাট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।'
-        : 'Chat failed. Please try again.');
+      console.error('Stream error:', err);
+      setMessages(prev => prev.filter(m => m.id !== botId));
+      setError(lang === 'bn' ? 'চ্যাট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' : 'Chat failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Handle voice transcript from Web Speech API
+  const handleVoiceTranscript = async (transcript) => {
+    setMessages(prev => [...prev, { type: 'user', text: transcript, timestamp: new Date() }]);
+    await streamChat(transcript);
   };
   
   // Fallback: Process audio blob (when Web Speech API not available)
@@ -337,70 +348,11 @@ function VoiceChat({ lang = 'bn', onClose }) {
   
   const handleTextSubmit = async (e) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    
     const userText = inputText.trim();
+    if (!userText) return;
     setInputText('');
-    setIsProcessing(true);
-    
-    // Add user message
-    const userMessage = {
-      type: 'user',
-      text: userText,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    try {
-      const response = await fetch(`${API_BASE}/voice/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('harvestguard_token') || 'demo-token-auto-login'}`
-        },
-        body: JSON.stringify({
-          text: userText,
-          lang: lang,
-          batches: batches
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Chat failed');
-      }
-      
-      const data = await response.json();
-      
-      // Add bot response
-      const botMessage = {
-        type: 'bot',
-        text: data.reply,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botMessage]);
-      
-      // Play audio if available
-      if (data.audioUrl) {
-        playAudio(data.audioUrl);
-      }
-      
-    } catch (err) {
-      console.error('Chat error:', err);
-      setError(lang === 'bn' 
-        ? 'চ্যাট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।'
-        : 'Chat failed. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const playAudio = (audioUrl) => {
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(err => {
-        console.error('Audio play error:', err);
-      });
-    }
+    setMessages(prev => [...prev, { type: 'user', text: userText, timestamp: new Date() }]);
+    await streamChat(userText);
   };
   
   return (

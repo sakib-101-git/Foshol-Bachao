@@ -10,7 +10,7 @@ const getApiBase = () => {
   }
   // Use localhost for local development
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3001/api';
+    return 'http://localhost:3002/api';
   }
   // Production - use Render backend
   return 'https://foshol-bachao-api.onrender.com/api';

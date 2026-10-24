@@ -332,7 +332,7 @@ function VoiceChat({ lang = 'bn', onClose }) {
       
       // Play audio if available
       if (data.audioUrl) {
-        playAudio(data.audioUrl);
+        new Audio(data.audioUrl).play().catch(() => speak(data.reply));
       }
       
     } catch (err) {
